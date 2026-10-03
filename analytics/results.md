@@ -166,6 +166,132 @@ Failure reasons:
 
 
 
+\## Test 5 - 50,000 User Stress Test
+
+
+
+\### Configuration
+
+
+
+\- Event: Fair Drop 500 Cricket Tickets Stress Test
+
+\- Total requests: 50,000
+
+\- Concurrent requests: 1,000
+
+\- Bot-like traffic: 20%
+
+\- Reservation window: 30 minutes
+
+\- Available tickets: 500
+
+
+
+\### Results
+
+
+
+\- Successful requests: 500
+
+\- Failed requests: 49,500
+
+\- Tickets allocated: 500
+
+\- Unique tickets: 500
+
+\- Duplicate tickets: No
+
+\- Overselling: No
+
+\- Normal tickets received: 399
+
+\- Bot-like tickets received: 101
+
+\- Normal success rate: 1.00%
+
+\- Bot-like success rate: 1.01%
+
+\- Throughput: 80.87 requests/sec
+
+\- Average latency: 7402.92 ms
+
+\- Median latency: 8054.25 ms
+
+\- Minimum latency: 992.54 ms
+
+\- Maximum latency: 16644.79 ms
+
+
+
+Failure reasons:
+
+
+
+\- No seats available: 49,500
+
+
+
+\### Historical 50,000 Request Run
+
+
+
+An earlier 50,000-request run used a 5-minute reservation window.
+
+
+
+That run produced:
+
+
+
+\- 50,000 requests
+
+\- 1,000 successful requests
+
+\- 49,000 failed requests
+
+\- 1,000 allocations
+
+\- 500 unique seats
+
+\- Duplicate allocation reported: Yes
+
+
+
+The duplicate result was caused by reservations expiring and seats becoming available again while the approximately 9.6-minute stress test was still running. It therefore represents seat reuse across different reservation periods, rather than two users simultaneously owning the same seat.
+
+
+
+The final 50,000-request test used a 30-minute reservation window to prevent this reuse during the test. It allocated exactly 500 unique seats and completed with no duplicate allocation or overselling.
+
+
+
+\## Same-User Concurrency Test
+
+
+
+A separate concurrency test sent 50 simultaneous reservation requests using the same user ID.
+
+
+
+Results:
+
+
+
+\- Successful requests: 1
+
+\- Rejected requests: 49
+
+\- Unexpected errors: 0
+
+\- Active reservations for the user: 1
+
+
+
+This verifies that simultaneous attempts by the same user cannot create multiple active reservations.
+
+
+
 \## Overall Safety Results
 
 
@@ -178,5 +304,29 @@ Failure reasons:
 
 \- Active duplicate reservation attempts: Rejected
 
+\- Database-level active-reservation protection: Enabled
+
 \- Automatic reservation expiry: Verified
+
+\- High-concurrency allocation: Stress tested
+
+
+
+\## Interpretation
+
+
+
+The allocation service successfully maintained inventory integrity during the final 50,000-request local stress test. All 500 available tickets were allocated exactly once during the controlled test window.
+
+
+
+The traffic simulator distinguishes normal and bot-like generated traffic for analysis. Actual bot detection and classification are handled by the anti-abuse component.
+
+
+
+The 50,000-request test is a local stress test and should not be interpreted as a production capacity benchmark. The measured throughput and latency depend on the local machine, network stack, PostgreSQL instance, and test configuration.
+
+
+
+Fairness should be evaluated again after integration with the fair queue, session handling, and anti-bot components.
 

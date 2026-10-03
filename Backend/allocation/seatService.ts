@@ -57,9 +57,6 @@ export async function reserveSeat(
         const seat = result.rows[0];
         const reservationId = randomUUID();
 
-        // Default reservation duration is 5 minutes.
-        // For stress testing, set RESERVATION_MINUTES
-        // in Backend/.env to a larger value.
         const reservationMinutes =
             Number(process.env.RESERVATION_MINUTES) || 5;
 
@@ -112,8 +109,19 @@ export async function reserveSeat(
             seatNumber: seat.seat_number
         };
 
-    } catch (error) {
+    } catch (error: any) {
         await client.query("ROLLBACK");
+
+        // PostgreSQL unique constraint violation.
+        // This can happen if two requests from the same user
+        // race each other at the same time.
+        if (error?.code === "23505") {
+            return {
+                success: false,
+                message: "User already has an active reservation"
+            };
+        }
+
         throw error;
 
     } finally {
