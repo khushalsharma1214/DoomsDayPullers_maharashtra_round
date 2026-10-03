@@ -10,7 +10,6 @@ export async function reserveSeat(
     try {
         await client.query("BEGIN");
 
-        // Check if the user already has an active reservation
         const existingReservation = await client.query(
             `
             SELECT id, seat_id
@@ -33,7 +32,6 @@ export async function reserveSeat(
             };
         }
 
-        // Find an available seat
         const result = await client.query(
             `
             SELECT id, seat_number
@@ -59,7 +57,12 @@ export async function reserveSeat(
         const seat = result.rows[0];
         const reservationId = randomUUID();
 
-        // Reserve the seat
+        // Default reservation duration is 5 minutes.
+        // For stress testing, set RESERVATION_MINUTES
+        // in Backend/.env to a larger value.
+        const reservationMinutes =
+            Number(process.env.RESERVATION_MINUTES) || 5;
+
         await client.query(
             `
             UPDATE seats
@@ -71,7 +74,6 @@ export async function reserveSeat(
             [userId, reservationId, seat.id]
         );
 
-        // Create reservation record
         await client.query(
             `
             INSERT INTO reservations
@@ -90,14 +92,15 @@ export async function reserveSeat(
                 $3,
                 $4,
                 'RESERVED',
-                NOW() + INTERVAL '5 minutes'
+                NOW() + ($5 * INTERVAL '1 minute')
             )
             `,
             [
                 reservationId,
                 eventId,
                 seat.id,
-                userId
+                userId,
+                reservationMinutes
             ]
         );
 

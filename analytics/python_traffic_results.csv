@@ -1,0 +1,5 @@
+Event ID,Total Requests,Successful,Failed,Throughput (req/s),Average Latency (ms),Median Latency (ms),Normal Tickets,Bot-like Tickets,Duplicate Allocation
+2,5000,0,5000,55.27,14130.96,15187.73,0,0,NO
+2,10,10,0,15.69,56.73,55.55,8,2,NO
+2,50000,1000,49000,86.92,6494.25,6313.21,796,204,YES
+2,50000,500,49500,80.87,7402.92,8054.25,399,101,NO
