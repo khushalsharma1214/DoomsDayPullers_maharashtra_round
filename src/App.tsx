@@ -1,855 +1,1877 @@
 import { Canvas } from "@react-three/fiber";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
+import Lenis from "@studio-freight/lenis";
 import StadiumScene from "./components/StadiumScene";
 
 gsap.registerPlugin(ScrollTrigger);
 
-const matches = [
+/* ==========================================================================
+   1. MATCH FIXTURES DATA (WITH DETAILED STADIUM METRICS & GUIDELINES)
+   ========================================================================== */
+export interface MatchFixture {
+  id: string;
+  team1: string;
+  team2: string;
+  name1: string;
+  name2: string;
+  rivalryTag: string;
+  tournament: string;
+  stadium: string;
+  city: string;
+  date: string;
+  time: string;
+  price: number;
+  capacity: string;
+  capacityNumber: string;
+  parking: string;
+  foodBeverages: string;
+  description: string;
+  images: string[];
+  pitchInfo: string;
+  guidelines: string[];
+}
+
+const matches: MatchFixture[] = [
   {
+    id: "match-01",
+    team1: "IND",
+    team2: "AUS",
+    name1: "INDIA",
+    name2: "AUSTRALIA",
+    rivalryTag: "BORDER-GAVASKAR TROPHY // 2ND ODI",
+    tournament: "2nd ODI",
+    stadium: "Wankhede Stadium",
+    city: "Mumbai, Maharashtra",
+    date: "18 Oct 2026",
+    time: "7:30 PM",
+    price: 1200,
+    capacity: "98% BOOKED",
+    capacityNumber: "33,000",
+    parking: "Available",
+    foodBeverages: "Available",
+    description:
+      "One of the most iconic cricket stadiums in the world, known for its electrifying atmosphere, coastal sea breeze, and rich championship history.",
+    images: [
+      "https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?auto=format&fit=crop&w=1200&q=80",
+      "https://images.unsplash.com/photo-1531415074868-036b107e775a?auto=format&fit=crop&w=1200&q=80",
+      "https://images.unsplash.com/photo-1517649763962-0c623266ddc0?auto=format&fit=crop&w=1200&q=80",
+    ],
+    pitchInfo:
+      "Red soil turf offering true bounce and carry for fast bowlers, while facilitating high-velocity stroke play under lights. Par 1st innings total: 195.",
+    guidelines: [
+      "Turnstiles open at 4:30 PM (3 hours prior to match commencement).",
+      "Only small personal bags permitted. Strictly no coins, power banks, or bottles.",
+      "Valid CricTix digital PNR pass barcode required at optical turnstiles.",
+      "Zero tolerance policy towards offensive language or pitch intrusion.",
+    ],
+  },
+  {
+    id: "match-02",
     team1: "MI",
     team2: "CSK",
     name1: "Mumbai Indians",
     name2: "Chennai Super Kings",
+    rivalryTag: "EL CLÁSICO // FIXTURE 02",
+    tournament: "IPL Mega Clash",
     stadium: "Wankhede Stadium",
-    city: "Mumbai",
-    date: "12 OCTOBER",
+    city: "Mumbai, Maharashtra",
+    date: "22 Oct 2026",
     time: "7:30 PM",
-    price: "999",
+    price: 1200,
+    capacity: "94% BOOKED",
+    capacityNumber: "33,000",
+    parking: "Available",
+    foodBeverages: "Available",
+    description:
+      "The ultimate IPL rivalry where five-time champions clash under the Marine Drive floodlights amidst deafening home chants.",
+    images: [
+      "https://images.unsplash.com/photo-1531415074868-036b107e775a?auto=format&fit=crop&w=1200&q=80",
+      "https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?auto=format&fit=crop&w=1200&q=80",
+      "https://images.unsplash.com/photo-1517649763962-0c623266ddc0?auto=format&fit=crop&w=1200&q=80",
+    ],
+    pitchInfo:
+      "Fast outfield with short square boundaries. Dew factor in the second innings strongly favors aggressive run chases.",
+    guidelines: [
+      "Entry turnstiles activate 3 hours before toss.",
+      "Wear your team colors proudly in designated fan sectors.",
+      "Digital wallet pass scanning enabled at all turnstile gates.",
+      "Emergency medical hubs located behind Garware and Tendulkar stands.",
+    ],
   },
   {
+    id: "match-03",
     team1: "RCB",
-    team2: "RR",
+    team2: "KKR",
     name1: "Royal Challengers",
-    name2: "Rajasthan Royals",
+    name2: "Kolkata Knight Riders",
+    rivalryTag: "SOUTHERN DERBY // FIXTURE 03",
+    tournament: "IPL Southern Derby",
     stadium: "M. Chinnaswamy Stadium",
-    city: "Bengaluru",
-    date: "15 OCTOBER",
+    city: "Bengaluru, Karnataka",
+    date: "26 Oct 2026",
     time: "7:30 PM",
-    price: "799",
+    price: 1200,
+    capacity: "88% BOOKED",
+    capacityNumber: "38,000",
+    parking: "Available",
+    foodBeverages: "Available",
+    description:
+      "India's premier high-scoring arena equipped with modern sub-air drainage, solar panel rooftops, and an explosive short-boundary outfield.",
+    images: [
+      "https://images.unsplash.com/photo-1517649763962-0c623266ddc0?auto=format&fit=crop&w=1200&q=80",
+      "https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?auto=format&fit=crop&w=1200&q=80",
+      "https://images.unsplash.com/photo-1531415074868-036b107e775a?auto=format&fit=crop&w=1200&q=80",
+    ],
+    pitchInfo:
+      "High altitude and short boundaries produce towering sixes. The SubAir drainage allows play to resume within 15 minutes of heavy rain.",
+    guidelines: [
+      "Gates open 3 hours before start time.",
+      "Metro connectivity via Cubbon Park Station directly outside Gate 1.",
+      "Eco-friendly zero-plastic arena policies strictly enforced.",
+    ],
   },
 ];
 
-function App() {
+/* ==========================================================================
+   2. CIRCULAR STADIUM SEAT GENERATOR (SVG RADIAL GEOMETRY)
+   ========================================================================== */
+export interface StadiumSeat {
+  id: string;
+  label: string;
+  stand: "NORTH STAND" | "EAST STAND" | "SOUTH STAND" | "VIP BOX" | "WEST STAND";
+  price: number;
+  cx: number;
+  cy: number;
+  status: "available" | "sold" | "premium";
+}
 
-  const [selectedMatch, setSelectedMatch] =
-    useState<(typeof matches)[0] | null>(null);
+function generateStadiumRadialSeats(): StadiumSeat[] {
+  const seats: StadiumSeat[] = [];
+  const cx = 270;
+  const cy = 270;
 
-  const [faq, setFaq] = useState<number | null>(null);
+  // 1. NORTH STAND (Top Arc: 220° to 320° / -140° to -40°) - ₹1,200
+  const northRows = [
+    { r: 138, count: 7, startAngle: -135, endAngle: -45, prefix: "A" },
+    { r: 166, count: 8, startAngle: -138, endAngle: -42, prefix: "A" },
+    { r: 196, count: 9, startAngle: -140, endAngle: -40, prefix: "A" },
+  ];
+  let nIndex = 1;
+  northRows.forEach((row) => {
+    const step = (row.endAngle - row.startAngle) / (row.count - 1);
+    for (let i = 0; i < row.count; i++) {
+      const angleDeg = row.startAngle + i * step;
+      const angleRad = (angleDeg * Math.PI) / 180;
+      const seatNum = nIndex++;
+      const id = `A${seatNum < 10 ? "0" + seatNum : seatNum}`;
+      const isSold = [3, 8, 17, 21].includes(seatNum);
+      seats.push({
+        id,
+        label: id,
+        stand: "NORTH STAND",
+        price: 1200,
+        cx: Math.round(cx + row.r * Math.cos(angleRad)),
+        cy: Math.round(cy + row.r * Math.sin(angleRad)),
+        status: isSold ? "sold" : "available",
+      });
+    }
+  });
 
-  const [seconds, setSeconds] = useState(47);
+  // 2. EAST STAND (Right Arc: -28° to 30°) - ₹1,500
+  const eastRows = [
+    { r: 138, count: 5, startAngle: -22, endAngle: 22, prefix: "E" },
+    { r: 168, count: 6, startAngle: -25, endAngle: 25, prefix: "E" },
+    { r: 198, count: 7, startAngle: -28, endAngle: 28, prefix: "E" },
+  ];
+  let eIndex = 1;
+  eastRows.forEach((row) => {
+    const step = (row.endAngle - row.startAngle) / (row.count - 1);
+    for (let i = 0; i < row.count; i++) {
+      const angleDeg = row.startAngle + i * step;
+      const angleRad = (angleDeg * Math.PI) / 180;
+      const seatNum = eIndex++;
+      const id = `E${seatNum < 10 ? "0" + seatNum : seatNum}`;
+      const isSold = [2, 7, 14].includes(seatNum);
+      seats.push({
+        id,
+        label: id,
+        stand: "EAST STAND",
+        price: 1500,
+        cx: Math.round(cx + row.r * Math.cos(angleRad)),
+        cy: Math.round(cy + row.r * Math.sin(angleRad)),
+        status: isSold ? "sold" : "available",
+      });
+    }
+  });
 
+  // 3. SOUTH STAND (Bottom Arc: 48° to 132°) - ₹2,000
+  const southRows = [
+    { r: 166, count: 7, startAngle: 50, endAngle: 130, prefix: "S" },
+    { r: 196, count: 8, startAngle: 48, endAngle: 132, prefix: "S" },
+    { r: 222, count: 9, startAngle: 46, endAngle: 134, prefix: "S" },
+  ];
+  let sIndex = 1;
+  southRows.forEach((row) => {
+    const step = (row.endAngle - row.startAngle) / (row.count - 1);
+    for (let i = 0; i < row.count; i++) {
+      const angleDeg = row.startAngle + i * step;
+      const angleRad = (angleDeg * Math.PI) / 180;
+      const seatNum = sIndex++;
+      const id = `S${seatNum < 10 ? "0" + seatNum : seatNum}`;
+      const isSold = [4, 11, 19].includes(seatNum);
+      seats.push({
+        id,
+        label: id,
+        stand: "SOUTH STAND",
+        price: 2000,
+        cx: Math.round(cx + row.r * Math.cos(angleRad)),
+        cy: Math.round(cy + row.r * Math.sin(angleRad)),
+        status: isSold ? "sold" : "available",
+      });
+    }
+  });
+
+  // 4. VIP BOX (Lower Center: 76° to 104°, closer to boundary) - ₹3,500
+  const vipRows = [
+    { r: 132, count: 4, startAngle: 78, endAngle: 102 },
+    { r: 148, count: 4, startAngle: 76, endAngle: 104 },
+  ];
+  let vIndex = 1;
+  vipRows.forEach((row) => {
+    const step = (row.endAngle - row.startAngle) / (row.count - 1);
+    for (let i = 0; i < row.count; i++) {
+      const angleDeg = row.startAngle + i * step;
+      const angleRad = (angleDeg * Math.PI) / 180;
+      const seatNum = vIndex++;
+      const id = `VIP-0${seatNum}`;
+      const isSold = seatNum === 3;
+      seats.push({
+        id,
+        label: id,
+        stand: "VIP BOX",
+        price: 3500,
+        cx: Math.round(cx + row.r * Math.cos(angleRad)),
+        cy: Math.round(cy + row.r * Math.sin(angleRad)),
+        status: isSold ? "sold" : "premium",
+      });
+    }
+  });
+
+  // 5. WEST STAND (Left Arc: 152° to 208°) - ₹1,500
+  const westRows = [
+    { r: 138, count: 5, startAngle: 158, endAngle: 202, prefix: "W" },
+    { r: 168, count: 6, startAngle: 155, endAngle: 205, prefix: "W" },
+    { r: 198, count: 7, startAngle: 152, endAngle: 208, prefix: "W" },
+  ];
+  let wIndex = 1;
+  westRows.forEach((row) => {
+    const step = (row.endAngle - row.startAngle) / (row.count - 1);
+    for (let i = 0; i < row.count; i++) {
+      const angleDeg = row.startAngle + i * step;
+      const angleRad = (angleDeg * Math.PI) / 180;
+      const seatNum = wIndex++;
+      const id = `W${seatNum < 10 ? "0" + seatNum : seatNum}`;
+      const isSold = [3, 9, 15].includes(seatNum);
+      seats.push({
+        id,
+        label: id,
+        stand: "WEST STAND",
+        price: 1500,
+        cx: Math.round(cx + row.r * Math.cos(angleRad)),
+        cy: Math.round(cy + row.r * Math.sin(angleRad)),
+        status: isSold ? "sold" : "available",
+      });
+    }
+  });
+
+  return seats;
+}
+
+const ALL_RADIAL_SEATS = generateStadiumRadialSeats();
+
+/* ==========================================================================
+   3. APP COMPONENT
+   ========================================================================== */
+export default function App() {
+  // 1. AUTHENTICATION GATE
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    return sessionStorage.getItem("crictix_logged_in") === "true";
+  });
+  const [authView, setAuthView] = useState<"login" | "signup" | "otp" | "signup-success">("login");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [generatedOtp, setGeneratedOtp] = useState("849201");
+  const [enteredOtp, setEnteredOtp] = useState("");
+  const [authError, setAuthError] = useState("");
+
+  // 2. USER PROFILE DATA & PROFILE MODAL
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const [profileSuccessMsg, setProfileSuccessMsg] = useState("");
+  const [userProfile, setUserProfile] = useState<{
+    username: string;
+    fullName: string;
+    email: string;
+    dob: string;
+    phone: string;
+    favoriteTeam: string;
+    loyaltyTier: string;
+    loyaltyPoints: number;
+  }>(() => {
+    try {
+      const saved = localStorage.getItem("crictix_user_profile");
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return {
+      username: "Alex_Cricketer",
+      fullName: "Alex Sharma",
+      email: sessionStorage.getItem("crictix_user_email") || "fan@cricket.com",
+      dob: "2000-05-18",
+      phone: "+91 98765 43210",
+      favoriteTeam: "Team India",
+      loyaltyTier: "COMMANDER VVIP",
+      loyaltyPoints: 2450,
+    };
+  });
+
+  // 3. THEME & SCROLL STATES
+  const [scrollProgress, setScrollProgress] = useState(0);
+  const [theme, setTheme] = useState<"dark" | "light">(() => {
+    return (localStorage.getItem("crictix_theme") as "dark" | "light") || "dark";
+  });
+  const [stumpsBroken, setStumpsBroken] = useState(false);
+
+  // 4. BOOKING STAGE MACHINE: "fixtures" -> "match-details" -> "seat-selection"
+  const [bookingStage, setBookingStage] = useState<"fixtures" | "match-details" | "seat-selection">(
+    "fixtures"
+  );
+  const [selectedMatch, setSelectedMatch] = useState<MatchFixture>(matches[0]);
+  const [matchDetailsTab, setMatchDetailsTab] = useState<"overview" | "info" | "guidelines">("overview");
+  const [carouselIndex, setCarouselIndex] = useState(0);
+
+  // 5. SEAT SELECTION & ZOOM
+  // Default selected seats: A12 & A13 at ₹1,200 (exact match to user mockup)
+  const [selectedSeatIds, setSelectedSeatIds] = useState<string[]>(["A12", "A13"]);
+  const [zoomLevel, setZoomLevel] = useState<number>(1.0);
+  const [hoveredSeat, setHoveredSeat] = useState<StadiumSeat | null>(null);
+
+  // 6. WALLET & PASSES
+  const [confirmedPass, setConfirmedPass] = useState<any | null>(null);
+  const [bookedPasses, setBookedPasses] = useState<any[]>(() => {
+    try {
+      const saved = localStorage.getItem("crictix_saved_passes");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [myTicketsDrawerOpen, setMyTicketsDrawerOpen] = useState(false);
+
+  // 7. FAQ
+  const [openFaq, setOpenFaq] = useState<number | null>(0);
+  const lenisRef = useRef<Lenis | null>(null);
+
+  // Selected Seats Objects & Total Calculation
+  const selectedSeatsObjects = useMemo(() => {
+    return ALL_RADIAL_SEATS.filter((s) => selectedSeatIds.includes(s.id));
+  }, [selectedSeatIds]);
+
+  const subtotal = useMemo(() => {
+    return selectedSeatsObjects.reduce((acc, curr) => acc + curr.price, 0);
+  }, [selectedSeatsObjects]);
+
+  const convenienceFee = selectedSeatsObjects.length > 0 ? 120 : 0;
+  const grandTotal = subtotal + convenienceFee;
+
+  // Toggle Theme
+  const toggleTheme = () => {
+    const next = theme === "dark" ? "light" : "dark";
+    setTheme(next);
+    localStorage.setItem("crictix_theme", next);
+  };
+
+  // Smooth Lenis Scroll
   useEffect(() => {
+    if (!isAuthenticated) return;
+    const lenis = new Lenis({
+      duration: 1.2,
+      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+      smoothWheel: true,
+    });
+    lenisRef.current = lenis;
 
-    const interval = setInterval(() => {
-      setSeconds((value) =>
-        value <= 0 ? 47 : value - 1
+    function raf(time: number) {
+      lenis.raf(time);
+      requestAnimationFrame(raf);
+    }
+    requestAnimationFrame(raf);
+
+    lenis.on("scroll", () => {
+      ScrollTrigger.update();
+      const maxScroll = Math.max(
+        document.documentElement.scrollHeight - window.innerHeight,
+        1
       );
-    }, 1000);
-
-    return () => clearInterval(interval);
-
-  }, []);
-
-  useEffect(() => {
-
-    const sections =
-      document.querySelectorAll(".reveal");
-
-    sections.forEach((section) => {
-
-      gsap.fromTo(
-        section,
-        {
-          opacity: 0,
-          y: 100,
-        },
-        {
-          opacity: 1,
-          y: 0,
-          duration: 1.2,
-          ease: "power3.out",
-          scrollTrigger: {
-            trigger: section,
-            start: "top 80%",
-          },
-        }
-      );
-
+      setScrollProgress(window.scrollY / maxScroll);
     });
 
-    return () => {
-      ScrollTrigger.getAll().forEach(
-        (trigger) => trigger.kill()
-      );
+    return () => lenis.destroy();
+  }, [isAuthenticated]);
+
+  // Handle Login
+  const handleLoginSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!authEmail.trim() || !authPassword.trim()) {
+      setAuthError("Please enter both email and password.");
+      return;
+    }
+    setUserProfile((prev) => ({ ...prev, email: authEmail }));
+    sessionStorage.setItem("crictix_logged_in", "true");
+    sessionStorage.setItem("crictix_user_email", authEmail);
+    setIsAuthenticated(true);
+  };
+
+  // Quick Demo Access
+  const handleQuickDemoLogin = () => {
+    const demo = "fan@cricket.com";
+    setAuthEmail(demo);
+    setUserProfile((prev) => ({ ...prev, email: demo }));
+    sessionStorage.setItem("crictix_logged_in", "true");
+    sessionStorage.setItem("crictix_user_email", demo);
+    setIsAuthenticated(true);
+  };
+
+  // Handle Request OTP
+  const handleRequestOtp = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!authEmail.trim()) {
+      setAuthError("Please enter a valid email address.");
+      return;
+    }
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    setGeneratedOtp(code);
+    setAuthError("");
+    setAuthView("otp");
+  };
+
+  // Handle Verify OTP
+  const handleVerifyOtp = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (enteredOtp.trim() !== generatedOtp.trim()) {
+      setAuthError("Invalid OTP. Please check the code.");
+      return;
+    }
+    setAuthError("");
+    setAuthView("signup-success");
+  };
+
+  // Complete Signup
+  const handleCompleteSignupAndEnter = () => {
+    sessionStorage.setItem("crictix_logged_in", "true");
+    sessionStorage.setItem("crictix_user_email", authEmail);
+    setUserProfile((prev) => ({ ...prev, email: authEmail }));
+    setIsAuthenticated(true);
+  };
+
+  // Handle Log Out
+  const handleLogOut = () => {
+    sessionStorage.removeItem("crictix_logged_in");
+    setIsAuthenticated(false);
+    setAuthView("login");
+    setAuthError("");
+  };
+
+  // Save Profile Updates
+  const handleSaveProfile = (e: React.FormEvent) => {
+    e.preventDefault();
+    localStorage.setItem("crictix_user_profile", JSON.stringify(userProfile));
+    setProfileSuccessMsg("Profile details saved successfully!");
+    setTimeout(() => setProfileSuccessMsg(""), 2500);
+  };
+
+  // Stumps impact callback from 3D scene
+  const handleImpactTrigger = (hasImpacted: boolean) => {
+    if (hasImpacted && !stumpsBroken) {
+      setStumpsBroken(true);
+    } else if (!hasImpacted && stumpsBroken && scrollProgress < 0.08) {
+      setStumpsBroken(false);
+    }
+  };
+
+  // Match Selection -> Goes to Match & Stadium Details Page
+  const handleSelectMatch = (match: MatchFixture) => {
+    setSelectedMatch(match);
+    setBookingStage("match-details");
+    setMatchDetailsTab("overview");
+    setCarouselIndex(0);
+
+    const matchSection = document.getElementById("booking-workflow");
+    if (matchSection && lenisRef.current) {
+      lenisRef.current.scrollTo(matchSection);
+    }
+  };
+
+  // Proceed from Match Details to Circular Stadium Seat Selection
+  const handleProceedToSeatSelection = () => {
+    setBookingStage("seat-selection");
+    const seatSection = document.getElementById("booking-workflow");
+    if (seatSection && lenisRef.current) {
+      lenisRef.current.scrollTo(seatSection);
+    }
+  };
+
+  // Toggle seat click in SVG circular stadium
+  const toggleSeatSelection = (seat: StadiumSeat) => {
+    if (seat.status === "sold") return;
+    setSelectedSeatIds((prev) =>
+      prev.includes(seat.id) ? prev.filter((id) => id !== seat.id) : [...prev, seat.id]
+    );
+  };
+
+  // Remove seat from sidebar chip
+  const removeSelectedSeat = (seatId: string) => {
+    setSelectedSeatIds((prev) => prev.filter((id) => id !== seatId));
+  };
+
+  // Zoom controls
+  const handleZoomIn = () => setZoomLevel((z) => Math.min(1.5, Number((z + 0.15).toFixed(2))));
+  const handleZoomOut = () => setZoomLevel((z) => Math.max(0.75, Number((z - 0.15).toFixed(2))));
+
+  // Confirm booking & dispatch pass
+  const handleConfirmReservation = () => {
+    if (selectedSeatsObjects.length === 0) return;
+    const newPass = {
+      pnr: `CRX-${Math.floor(100000 + Math.random() * 900000)}`,
+      match: selectedMatch,
+      seats: selectedSeatsObjects,
+      holder: userProfile.fullName,
+      dateBooked: new Date().toLocaleDateString(),
+      totalAmount: grandTotal,
     };
 
-  }, []);
+    setConfirmedPass(newPass);
+    const updated = [newPass, ...bookedPasses];
+    setBookedPasses(updated);
+    localStorage.setItem("crictix_saved_passes", JSON.stringify(updated));
+  };
 
+  /* ==========================================================================
+     4. AUTHENTICATION GATE: LOGIN / SIGNUP / OTP / SUCCESS
+     ========================================================================== */
+  if (!isAuthenticated) {
+    return (
+      <div className={`auth-universe ${theme === "light" ? "light-theme" : "dark-theme"}`}>
+        <div className="auth-card-wrapper">
+          <div className="auth-card">
+            <div className="auth-brand">
+              <div className="brand-badge">🏏</div>
+              <h2>CRIC<span>TIX</span></h2>
+              <p>TACTICAL STADIUM ARENA // ACCESS PORTAL</p>
+            </div>
+
+            {authError && <div className="auth-error-banner">{authError}</div>}
+
+            {authView === "login" && (
+              <form onSubmit={handleLoginSubmit} className="auth-form">
+                <h3>SIGN IN TO ENTER STADIUM</h3>
+
+                <div className="auth-field">
+                  <label>EMAIL ADDRESS</label>
+                  <input
+                    type="email"
+                    placeholder="fan@cricket.com"
+                    value={authEmail}
+                    onChange={(e) => setAuthEmail(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="auth-field">
+                  <label>PASSWORD</label>
+                  <input
+                    type="password"
+                    placeholder="••••••••••••"
+                    value={authPassword}
+                    onChange={(e) => setAuthPassword(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <button type="submit" className="auth-submit-btn">
+                  SIGN IN ➔
+                </button>
+
+                <button
+                  type="button"
+                  className="auth-demo-btn"
+                  onClick={handleQuickDemoLogin}
+                >
+                  ⚡ ONE-CLICK DEMO ACCESS
+                </button>
+
+                <div className="auth-switch">
+                  <span>Don't have an account?</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthError("");
+                      setAuthView("signup");
+                    }}
+                  >
+                    SIGN UP
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {authView === "signup" && (
+              <form onSubmit={handleRequestOtp} className="auth-form">
+                <h3>CREATE ARENA ACCOUNT</h3>
+                <p className="auth-step-desc">Enter your email. A 6-digit OTP will be dispatched for verification.</p>
+
+                <div className="auth-field">
+                  <label>EMAIL ADDRESS</label>
+                  <input
+                    type="email"
+                    placeholder="newfan@cricket.com"
+                    value={authEmail}
+                    onChange={(e) => setAuthEmail(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="auth-field">
+                  <label>CREATE PASSWORD</label>
+                  <input
+                    type="password"
+                    placeholder="Create a password"
+                    value={authPassword}
+                    onChange={(e) => setAuthPassword(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <button type="submit" className="auth-submit-btn">
+                  SEND OTP ➔
+                </button>
+
+                <div className="auth-switch">
+                  <span>Already have an account?</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthError("");
+                      setAuthView("login");
+                    }}
+                  >
+                    SIGN IN
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {authView === "otp" && (
+              <form onSubmit={handleVerifyOtp} className="auth-form">
+                <h3>ENTER VERIFICATION OTP</h3>
+                <p className="auth-step-desc">
+                  We sent a 6-digit code to <strong>{authEmail}</strong>.
+                </p>
+
+                <div className="simulated-otp-alert">
+                  <span>🔔 SIMULATED SMS / EMAIL OTP:</span>
+                  <strong>{generatedOtp}</strong>
+                </div>
+
+                <div className="auth-field">
+                  <label>6-DIGIT OTP</label>
+                  <input
+                    type="text"
+                    maxLength={6}
+                    placeholder="Enter 6-digit code"
+                    value={enteredOtp}
+                    onChange={(e) => setEnteredOtp(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <button type="submit" className="auth-submit-btn">
+                  VERIFY OTP & ACTIVATE ➔
+                </button>
+
+                <div className="auth-switch">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const code = String(Math.floor(100000 + Math.random() * 900000));
+                      setGeneratedOtp(code);
+                    }}
+                  >
+                    ↺ Resend Code
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAuthView("signup")}
+                  >
+                    Change Email
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {authView === "signup-success" && (
+              <div className="auth-success-box">
+                <div className="success-icon">✓</div>
+                <h3>SIGN UP SUCCESSFUL!</h3>
+                <p>Your CricTix match credentials have been activated for <strong>{authEmail}</strong>.</p>
+                <button
+                  type="button"
+                  className="auth-submit-btn"
+                  onClick={handleCompleteSignupAndEnter}
+                >
+                  ENTER CRICTIX STADIUM ➔
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /* ==========================================================================
+     5. MAIN STADIUM ARENA APPLICATION
+     ========================================================================== */
   return (
-    <div className="crictix">
-
-      {/* =================================
-          FIXED 3D WORLD
-      ================================= */}
-
-      <div className="world">
-
+    <div className={`tactical-arena ${theme === "light" ? "light-theme" : "dark-theme"}`}>
+      {/* 3D CANVAS WORLD */}
+      <div className="canvas-wrapper">
         <Canvas
-          camera={{
-            position: [0, 4, 15],
-            fov: 45,
-          }}
-          dpr={[1, 1.7]}
-          gl={{
-            antialias: true,
-          }}
+          camera={{ position: [0.8, 2.2, 9.8], fov: 44 }}
+          dpr={[1, 1.8]}
+          gl={{ antialias: true, powerPreference: "high-performance" }}
         >
-
-          <StadiumScene />
-
+          <StadiumScene
+            scrollProgress={scrollProgress}
+            theme={theme}
+            selectedMatch={selectedMatch}
+            onImpactTrigger={handleImpactTrigger}
+          />
         </Canvas>
-
       </div>
 
-
-      {/* =================================
-          NAVBAR
-      ================================= */}
-
-      <nav className="navbar">
-
-        <div className="logo">
-
-          <div className="logo-ball">
-            🏏
-          </div>
-
+      {/* TOP NAVBAR (CRICKTIX / HOME / MATCHES / MY BOOKINGS / PROFILE) */}
+      <header className="tactical-navbar">
+        <div className="nav-brand">
+          <div className="brand-badge">🏏</div>
           <div>
-
-            <strong>
-              CRIC<span>TIX</span>
-            </strong>
-
-            <small>
-              LIVE THE GAME
-            </small>
-
+            <strong>CRICK<span>TIX</span></strong>
+            <div className="system-status">
+              <span className="live-dot" />
+              STADIUM ARENA // LIVE
+            </div>
           </div>
-
         </div>
 
-        <div className="nav-links">
+        <nav className="nav-menu">
+          <a href="#hero">Home</a>
+          <a href="#fixtures">Matches</a>
+          <button
+            type="button"
+            className="nav-link-btn"
+            onClick={() => setMyTicketsDrawerOpen(true)}
+          >
+            My Bookings ({bookedPasses.length})
+          </button>
+          <button
+            type="button"
+            className="nav-link-btn"
+            onClick={() => setProfileModalOpen(true)}
+          >
+            Profile
+          </button>
+        </nav>
 
-          <a href="#matches">
-            MATCHES
-          </a>
+        <div className="nav-controls">
+          <button className="theme-btn" onClick={toggleTheme}>
+            {theme === "dark" ? "☀️ LIGHT" : "🌙 DARK"}
+          </button>
 
-          <a href="#experience">
-            EXPERIENCE
-          </a>
+          <button
+            className="profile-nav-btn"
+            onClick={() => setProfileModalOpen(true)}
+            title="View & Edit Profile"
+          >
+            👤 @{userProfile.username}
+          </button>
 
-          <a href="#tickets">
-            TICKETS
-          </a>
-
-          <a href="#faq">
-            FAQ
-          </a>
-
+          <button className="logout-btn" onClick={handleLogOut} title="Log out">
+            LOG OUT
+          </button>
         </div>
+      </header>
 
-        <button className="nav-ticket">
-          MY TICKETS
-        </button>
+      {/* HERO SECTION */}
+      <section id="hero" className="chapter-section hero-section">
+        <div className="section-content">
+          <div className={`impact-typography ${stumpsBroken ? "revealed" : "hidden-initially"}`}>
+            <p className="tactical-tag">[ STUMPS BROKEN // ARENA UNLOCKED ]</p>
 
-      </nav>
+            <h1 className="hero-glitch">
+              RULES OF
+              <br />
+              <span className="word-accent">CRICKET.</span>
+              <br />
+              TRANSCENDED.
+            </h1>
 
+            <p className="hero-subtext">
+              The ball strikes the wickets and the live stadium scoreboard behind the stumps activates.
+              Select your match below to view stadium details and pick your seats on the circular radial map.
+            </p>
 
-      {/* =================================
-          HERO
-      ================================= */}
-
-      <section className="hero">
-
-        <div className="hero-copy">
-
-          <p className="eyebrow">
-            THE STADIUM IS WAITING
-          </p>
-
-          <h1>
-            DON'T WATCH.
-            <br />
-
-            <span>
-              LIVE IT.
-            </span>
-          </h1>
-
-          <p className="hero-description">
-            The roar. The lights. The final ball.
-            <br />
-            Your seat is waiting.
-          </p>
-
-          <div className="hero-actions">
-
-            <a
-              href="#matches"
-              className="primary-button"
-            >
-              ENTER THE GAME
-              <span>↗</span>
-            </a>
-
-            <a
-              href="#experience"
-              className="ghost-button"
-            >
-              DISCOVER CRICTIX
-            </a>
-
+            <div className="hero-actions">
+              <a href="#fixtures" className="tactical-cta primary">
+                SELECT MATCH TO BOOK ➔
+              </a>
+            </div>
           </div>
-
         </div>
 
-        <div className="scroll-prompt">
-
-          <span>
-            SCROLL TO ENTER
-          </span>
-
-          <div />
-
-        </div>
-
+        {/* SMALL VISIBLE "scroll down" AT CENTER BOTTOM */}
+        <div className="center-scroll-down">scroll down ↓</div>
       </section>
 
-
-      {/* =================================
-          TRANSITION
-      ================================= */}
-
-      <section className="transition-section">
-
-        <div className="transition-text">
-
-          <span>
-            THE GAME
-          </span>
-
-          <strong>
-            IS HERE.
-          </strong>
-
-        </div>
-
-      </section>
-
-
-      {/* =================================
-          COUNTDOWN
-      ================================= */}
-
-      <section className="countdown-section reveal">
-
-        <p className="eyebrow">
-          NEXT BIG FIXTURE
-        </p>
-
-        <h2>
-          MI <span>VS</span> CSK
-        </h2>
-
-        <p className="location">
-          WANKHEDE STADIUM · MUMBAI
-        </p>
-
-        <div className="countdown">
-
-          <div>
-            <strong>09</strong>
-            <span>DAYS</span>
-          </div>
-
-          <div>
-            <strong>18</strong>
-            <span>HOURS</span>
-          </div>
-
-          <div>
-            <strong>42</strong>
-            <span>MINUTES</span>
-          </div>
-
-          <div>
-            <strong>
-              {String(seconds).padStart(2, "0")}
-            </strong>
-            <span>SECONDS</span>
-          </div>
-
-        </div>
-
-      </section>
-
-
-      {/* =================================
-          MATCHES
-      ================================= */}
-
-      <section
-        id="matches"
-        className="matches-section"
-      >
-
-        <div className="section-heading reveal">
-
-          <p className="eyebrow">
-            THE FIXTURES
+      {/* STEP 1: FIXTURES SECTION */}
+      <section id="fixtures" className="chapter-section fixtures-section">
+        <div className="section-content full-width">
+          <p className="tactical-tag">[ STEP 1: CHOOSE YOUR GAME ]</p>
+          <h2>SELECT A MATCH FIXTURE.</h2>
+          <p className="section-intro">
+            Click on any fixture below. The 3D stadium scoreboard behind the stumps updates dynamically with your chosen teams.
           </p>
 
-          <h2>
-            CHOOSE
-            <br />
-            YOUR GAME.
-          </h2>
-
-          <p>
-            The biggest rivalries.
-            <br />
-            One seat away.
-          </p>
-
-        </div>
-
-
-        <div className="match-grid">
-
-          {matches.map((match, index) => (
-
-            <div
-              className="match-card reveal"
-              key={index}
-            >
-
-              <div className="match-number">
-                0{index + 1}
-              </div>
-
-              <div className="match-date">
-                {match.date}
-              </div>
-
-              <div className="teams">
-
-                <div>
-
-                  <div className="team-logo blue">
-                    {match.team1}
+          <div className="fixtures-grid">
+            {matches.map((match) => {
+              const isSelected = selectedMatch.id === match.id;
+              return (
+                <div
+                  key={match.id}
+                  className={`fixture-card ${isSelected ? "selected-match" : ""}`}
+                >
+                  <div className="card-top">
+                    <span className="rivalry-tag">{match.rivalryTag}</span>
+                    <span className="capacity-pill">{match.capacity}</span>
                   </div>
 
-                  <h3>
-                    {match.name1}
-                  </h3>
-
-                </div>
-
-                <span className="vs">
-                  VS
-                </span>
-
-                <div>
-
-                  <div className="team-logo yellow">
-                    {match.team2}
+                  <div className="teams-clash">
+                    <div className="team-cell">
+                      <div className="team-flag blue">{match.team1}</div>
+                      <span className="team-fullname">{match.name1}</span>
+                    </div>
+                    <div className="clash-badge">VS</div>
+                    <div className="team-cell">
+                      <div className="team-flag yellow">{match.team2}</div>
+                      <span className="team-fullname">{match.name2}</span>
+                    </div>
                   </div>
 
-                  <h3>
-                    {match.name2}
-                  </h3>
+                  <div className="match-meta-list">
+                    <div>
+                      <span>📍 VENUE</span>
+                      <strong>{match.stadium} • {match.city}</strong>
+                    </div>
+                    <div>
+                      <span>⏱ SCHEDULE</span>
+                      <strong>{match.date} • {match.time}</strong>
+                    </div>
+                  </div>
 
+                  <div className="card-footer">
+                    <div>
+                      <small>FROM</small>
+                      <strong>₹{match.price}</strong>
+                    </div>
+                    <button
+                      className="select-fixture-btn"
+                      onClick={() => handleSelectMatch(match)}
+                    >
+                      {isSelected && bookingStage !== "fixtures"
+                        ? "VIEW DETAILS & SEATS →"
+                        : "VIEW STADIUM & BOOK →"}
+                    </button>
+                  </div>
                 </div>
-
-              </div>
-
-              <div className="match-info">
-
-                <span>
-                  📍 {match.stadium}
-                </span>
-
-                <span>
-                  {match.time}
-                </span>
-
-              </div>
-
-              <div className="match-bottom">
-
-                <div>
-
-                  <small>
-                    FROM
-                  </small>
-
-                  <strong>
-                    ₹{match.price}
-                  </strong>
-
-                </div>
-
-                <button
-                  onClick={() =>
-                    setSelectedMatch(match)
-                  }
-                >
-                  SELECT SEAT →
-                </button>
-
-              </div>
-
-            </div>
-
-          ))}
-
+              );
+            })}
+          </div>
         </div>
-
       </section>
 
-
-      {/* =================================
-          EXPERIENCE
-      ================================= */}
-
-      <section
-        id="experience"
-        className="experience-section"
-      >
-
-        <div className="experience-copy reveal">
-
-          <p className="eyebrow">
-            MORE THAN A TICKET
-          </p>
-
-          <h2>
-            THE MATCH
-            <br />
-            STARTS
-            <br />
-
-            <span>
-              HERE.
-            </span>
-          </h2>
-
-        </div>
-
-        <div className="experience-list">
-
-          {[
-            [
-              "01",
-              "CHOOSE YOUR VIEW",
-              "Find the seat that gives you the perfect angle."
-            ],
-            [
-              "02",
-              "LOCK YOUR SEAT",
-              "Secure your place before the crowd gets there."
-            ],
-            [
-              "03",
-              "LIVE THE MOMENT",
-              "Walk through the gates and feel the stadium roar."
-            ],
-          ].map(([number, title, text]) => (
-
-            <div
-              className="experience-row reveal"
-              key={number}
-            >
-
-              <span>
-                {number}
-              </span>
-
-              <div>
-
-                <h3>
-                  {title}
-                </h3>
-
-                <p>
-                  {text}
-                </p>
-
-              </div>
-
-              <b>
-                ↗
-              </b>
-
-            </div>
-
-          ))}
-
-        </div>
-
-      </section>
-
-
-      {/* =================================
-          TICKET TIERS
-      ================================= */}
-
-      <section
-        id="tickets"
-        className="tickets-section"
-      >
-
-        <div className="section-heading centered reveal">
-
-          <p className="eyebrow">
-            FIND YOUR VIEW
-          </p>
-
-          <h2>
-            YOUR
-            <br />
-            SEAT.
-            <span>
-              YOUR
-            </span>
-            <br />
-            STORY.
-          </h2>
-
-        </div>
-
-
-        <div className="ticket-grid">
-
-          {[
-            [
-              "STANDARD",
-              "₹999",
-              "Great atmosphere",
-              "Upper stand"
-            ],
-            [
-              "PREMIUM",
-              "₹1,499",
-              "Closer to the action",
-              "Premium stand"
-            ],
-            [
-              "VIP",
-              "₹2,499",
-              "The ultimate view",
-              "Hospitality lounge"
-            ],
-          ].map(
-            ([name, price, description, place], index) => (
-
-              <div
-                className={`tier tier-${index}`}
-                key={name}
-              >
-
-                <span className="tier-number">
-                  0{index + 1}
-                </span>
-
-                <p>
-                  {name}
-                </p>
-
-                <strong>
-                  {price}
-                </strong>
-
-                <div>
-                  <span>
-                    {description}
-                  </span>
-
-                  <span>
-                    {place}
-                  </span>
-                </div>
-
+      {/* DEDICATED BOOKING WORKFLOW CONTAINER */}
+      <section id="booking-workflow" className="chapter-section booking-section">
+        <div className="section-content full-width">
+          {/* ================================================================
+              VIEW 2: MATCH & STADIUM DETAILS PAGE (PANEL 2 IN USER IMAGE)
+              ================================================================ */}
+          {bookingStage === "match-details" && (
+            <div className="match-details-view animate-fade-in">
+              {/* Back to Matches Button */}
+              <div className="breadcrumb-nav">
                 <button
-                  onClick={() =>
-                    setSelectedMatch(matches[0])
-                  }
+                  type="button"
+                  className="back-btn"
+                  onClick={() => setBookingStage("fixtures")}
                 >
-                  CHOOSE
+                  ❮ Back to Matches
                 </button>
-
               </div>
 
-            )
+              {/* Match Header Clash Banner */}
+              <div className="match-hero-banner">
+                <div className="banner-bg-overlay" />
+                <div className="banner-content">
+                  <div className="hero-team left">
+                    <div className="team-crest-circle">
+                      {selectedMatch.team1 === "IND" ? (
+                        <div className="flag-circle india-flag">
+                          <span className="chakra" />
+                        </div>
+                      ) : (
+                        <span className="flag-badge-text">{selectedMatch.team1}</span>
+                      )}
+                    </div>
+                    <span className="hero-team-name">{selectedMatch.name1}</span>
+                  </div>
+
+                  <div className="hero-clash-mid">
+                    <span className="vs-pill">VS</span>
+                    <span className="series-tag">{selectedMatch.tournament}</span>
+                    <div className="meta-row">
+                      <span>📅 {selectedMatch.date}</span>
+                      <span>🕒 {selectedMatch.time}</span>
+                    </div>
+                    <div className="venue-tag">
+                      📍 {selectedMatch.stadium}, {selectedMatch.city.split(",")[0]}
+                    </div>
+                  </div>
+
+                  <div className="hero-team right">
+                    <span className="hero-team-name">{selectedMatch.name2}</span>
+                    <div className="team-crest-circle">
+                      {selectedMatch.team2 === "AUS" ? (
+                        <div className="flag-circle aus-flag">
+                          <span className="aus-star">★</span>
+                        </div>
+                      ) : (
+                        <span className="flag-badge-text">{selectedMatch.team2}</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Navigation Tabs (Overview / Stadium Info / Event Guidelines) */}
+              <div className="details-tabs-bar">
+                <button
+                  className={`tab-item ${matchDetailsTab === "overview" ? "active" : ""}`}
+                  onClick={() => setMatchDetailsTab("overview")}
+                >
+                  Overview
+                </button>
+                <button
+                  className={`tab-item ${matchDetailsTab === "info" ? "active" : ""}`}
+                  onClick={() => setMatchDetailsTab("info")}
+                >
+                  Stadium Info
+                </button>
+                <button
+                  className={`tab-item ${matchDetailsTab === "guidelines" ? "active" : ""}`}
+                  onClick={() => setMatchDetailsTab("guidelines")}
+                >
+                  Event Guidelines
+                </button>
+              </div>
+
+              {/* Tab 1: Overview Tab */}
+              {matchDetailsTab === "overview" && (
+                <div className="tab-pane-card overview-pane">
+                  <div className="overview-grid">
+                    {/* Left: Stadium Photo Card with Carousel Dots */}
+                    <div className="stadium-preview-box">
+                      <div className="stadium-image-container">
+                        <img
+                          src={selectedMatch.images[carouselIndex]}
+                          alt={selectedMatch.stadium}
+                          className="stadium-hero-img"
+                        />
+                        <div className="carousel-nav-arrows">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setCarouselIndex((c) =>
+                                c === 0 ? selectedMatch.images.length - 1 : c - 1
+                              )
+                            }
+                          >
+                            ‹
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setCarouselIndex((c) =>
+                                c === selectedMatch.images.length - 1 ? 0 : c + 1
+                              )
+                            }
+                          >
+                            ›
+                          </button>
+                        </div>
+                      </div>
+                      <div className="carousel-dots">
+                        {selectedMatch.images.map((_, i) => (
+                          <span
+                            key={i}
+                            className={`dot-indicator ${carouselIndex === i ? "active" : ""}`}
+                            onClick={() => setCarouselIndex(i)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Right: Stadium Info & Key Metric Badges */}
+                    <div className="stadium-copy-box">
+                      <h3 className="stadium-title">{selectedMatch.stadium}</h3>
+                      <p className="stadium-desc">{selectedMatch.description}</p>
+
+                      <div className="stadium-specs-list">
+                        <div className="spec-row">
+                          <span className="spec-icon">👥</span>
+                          <strong>Capacity: {selectedMatch.capacityNumber}</strong>
+                        </div>
+                        <div className="spec-row">
+                          <span className="spec-icon">📍</span>
+                          <strong>Location: {selectedMatch.city}</strong>
+                        </div>
+                        <div className="spec-row">
+                          <span className="spec-icon">🅿️</span>
+                          <strong>Parking: {selectedMatch.parking}</strong>
+                        </div>
+                        <div className="spec-row">
+                          <span className="spec-icon">🍔</span>
+                          <strong>Food & Beverages: {selectedMatch.foodBeverages}</strong>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Proceed to Seat Selection CTA */}
+                  <div className="details-action-bar">
+                    <button
+                      type="button"
+                      className="view-seats-cta"
+                      onClick={handleProceedToSeatSelection}
+                    >
+                      View Stadium & Select Seats ➔
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Tab 2: Stadium Info Tab */}
+              {matchDetailsTab === "info" && (
+                <div className="tab-pane-card">
+                  <h3 className="stadium-title">PITCH & INFRASTRUCTURE REPORT</h3>
+                  <p className="stadium-desc">{selectedMatch.pitchInfo}</p>
+                  <div className="info-bullets-grid">
+                    <div className="info-box">
+                      <strong>DIMENSIONS</strong>
+                      <span>Straight boundary: 74m • Square boundary: 67m</span>
+                    </div>
+                    <div className="info-box">
+                      <strong>LIGHTING</strong>
+                      <span>4 High-mast towers with 2,500 LUX LED broadcast spec</span>
+                    </div>
+                    <div className="info-box">
+                      <strong>TRANSIT</strong>
+                      <span>Churchgate & Marine Lines railway stations within 500m</span>
+                    </div>
+                    <div className="info-box">
+                      <strong>DRAINAGE</strong>
+                      <span>Full sub-soil vacuum drainage system active</span>
+                    </div>
+                  </div>
+                  <div className="details-action-bar">
+                    <button
+                      type="button"
+                      className="view-seats-cta"
+                      onClick={handleProceedToSeatSelection}
+                    >
+                      View Stadium & Select Seats ➔
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Tab 3: Event Guidelines Tab */}
+              {matchDetailsTab === "guidelines" && (
+                <div className="tab-pane-card">
+                  <h3 className="stadium-title">EVENT PROTOCOL & SECURITY</h3>
+                  <div className="guidelines-list">
+                    {selectedMatch.guidelines.map((g, idx) => (
+                      <div key={idx} className="guideline-row">
+                        <span className="badge-num">0{idx + 1}</span>
+                        <p>{g}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="details-action-bar">
+                    <button
+                      type="button"
+                      className="view-seats-cta"
+                      onClick={handleProceedToSeatSelection}
+                    >
+                      View Stadium & Select Seats ➔
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           )}
 
-        </div>
-
-      </section>
-
-
-      {/* =================================
-          FAQ
-      ================================= */}
-
-      <section
-        id="faq"
-        className="faq-section"
-      >
-
-        <div className="faq-title reveal">
-
-          <p className="eyebrow">
-            FREQUENTLY ASKED
-          </p>
-
-          <h2>
-            QUESTIONS
-          </h2>
-
-          <p>
-            TAP ANY RECORD TO
-            <br />
-            REVEAL DETAILS.
-          </p>
-
-        </div>
-
-
-        <div className="faq-list">
-
-          {[
-            [
-              "HOW DO I BOOK?",
-              "Choose a match, select your seats and complete checkout. Your digital ticket will be generated after confirmation."
-            ],
-            [
-              "CAN I CHOOSE MY SEAT?",
-              "Yes. CricTix provides an interactive seat-selection experience with different ticket tiers."
-            ],
-            [
-              "CAN I CANCEL MY TICKET?",
-              "Cancellation and refund availability can be configured according to the event's ticket policy."
-            ],
-            [
-              "DO I GET A DIGITAL TICKET?",
-              "Yes. Your confirmed booking can generate a digital ticket containing your match, seat and booking details."
-            ],
-            [
-              "HOW DOES THE STADIUM MAP WORK?",
-              "Choose a section, explore available seats and select the view you prefer before continuing."
-            ],
-          ].map(([question, answer], index) => {
-
-            const open = faq === index;
-
-            return (
-
-              <div
-                className={`faq-item ${
-                  open ? "open" : ""
-                }`}
-                key={question}
-              >
-
+          {/* ================================================================
+              VIEW 3: IMPROVED CIRCULAR STADIUM SEAT SELECTION PAGE (PANEL 3)
+              ================================================================ */}
+          {bookingStage === "seat-selection" && (
+            <div className="seat-selection-view animate-fade-in">
+              {/* Back to Match Details Button */}
+              <div className="breadcrumb-nav">
                 <button
-                  onClick={() =>
-                    setFaq(open ? null : index)
-                  }
+                  type="button"
+                  className="back-btn"
+                  onClick={() => setBookingStage("match-details")}
                 >
-
-                  <span>
-                    0{index + 1}
-                  </span>
-
-                  <strong>
-                    {question}
-                  </strong>
-
-                  <b>
-                    {open ? "−" : "+"}
-                  </b>
-
+                  ❮ Back
                 </button>
-
-                {open && (
-                  <p>
-                    {answer}
-                  </p>
-                )}
-
               </div>
 
-            );
+              <div className="seat-selection-two-col">
+                {/* LEFT COLUMN: CIRCULAR STADIUM RADIAL MAP */}
+                <div className="circular-stadium-card">
+                  <div className="stadium-card-header">
+                    <h2>Select Your Seats</h2>
+                    <div className="stadium-legend-row">
+                      <span className="legend-item">
+                        <i className="legend-dot available" /> Available
+                      </span>
+                      <span className="legend-item">
+                        <i className="legend-dot selected" /> Selected
+                      </span>
+                      <span className="legend-item">
+                        <i className="legend-dot sold" /> Sold
+                      </span>
+                      <span className="legend-item">
+                        <i className="legend-dot premium" /> Premium
+                      </span>
+                    </div>
+                  </div>
 
-          })}
+                  {/* SVG CIRCULAR CRICKET STADIUM CONTAINER */}
+                  <div className="svg-stadium-viewport">
+                    <div
+                      className="svg-zoom-stage"
+                      style={{
+                        transform: `scale(${zoomLevel})`,
+                        transformOrigin: "center center",
+                        transition: "transform 0.25s ease-out",
+                      }}
+                    >
+                      <svg
+                        viewBox="0 0 540 540"
+                        className="radial-stadium-svg"
+                        preserveAspectRatio="xMidYMid meet"
+                      >
+                        <defs>
+                          {/* Radial Gradient for Authentic Cricket Grass */}
+                          <radialGradient id="turfGradient" cx="50%" cy="50%" r="50%">
+                            <stop offset="0%" stopColor="#1e5421" />
+                            <stop offset="55%" stopColor="#256b29" />
+                            <stop offset="85%" stopColor="#1e5421" />
+                            <stop offset="100%" stopColor="#143c16" />
+                          </radialGradient>
 
+                          {/* Glow filter for selected seat */}
+                          <filter id="seatGlow" x="-50%" y="-50%" width="200%" height="200%">
+                            <feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="blur" />
+                            <feMerge>
+                              <feMergeNode in="blur" />
+                              <feMergeNode in="SourceGraphic" />
+                            </feMerge>
+                          </filter>
+                        </defs>
+
+                        {/* Outer Stadium Concrete Perimeter */}
+                        <circle
+                          cx="270"
+                          cy="270"
+                          r="256"
+                          fill="#090f1d"
+                          stroke={theme === "light" ? "#94a3b8" : "#1e293b"}
+                          strokeWidth="3"
+                        />
+
+                        {/* SECTOR 1: NORTH STAND (TOP ARC - BLUE/CYAN) */}
+                        <path
+                          d="M 125 125 A 205 205 0 0 1 415 125 L 348 192 A 110 110 0 0 0 192 192 Z"
+                          fill="rgba(2, 132, 199, 0.25)"
+                          stroke="#0284c7"
+                          strokeWidth="1.5"
+                        />
+                        <text
+                          x="270"
+                          y="62"
+                          textAnchor="middle"
+                          fill="#38bdf8"
+                          fontSize="11"
+                          fontWeight="bold"
+                          letterSpacing="1"
+                        >
+                          NORTH STAND
+                        </text>
+                        <text
+                          x="270"
+                          y="76"
+                          textAnchor="middle"
+                          fill="#94a3b8"
+                          fontSize="9"
+                          fontWeight="bold"
+                        >
+                          (₹1,200)
+                        </text>
+
+                        {/* SECTOR 2: EAST STAND (RIGHT ARC - AMBER/ORANGE) */}
+                        <path
+                          d="M 415 125 A 205 205 0 0 1 415 415 L 348 348 A 110 110 0 0 0 348 192 Z"
+                          fill="rgba(217, 119, 6, 0.22)"
+                          stroke="#ea580c"
+                          strokeWidth="1.5"
+                        />
+                        <text
+                          x="474"
+                          y="266"
+                          textAnchor="middle"
+                          fill="#fb923c"
+                          fontSize="11"
+                          fontWeight="bold"
+                          letterSpacing="1"
+                        >
+                          EAST STAND
+                        </text>
+                        <text
+                          x="474"
+                          y="280"
+                          textAnchor="middle"
+                          fill="#94a3b8"
+                          fontSize="9"
+                          fontWeight="bold"
+                        >
+                          (₹1,500)
+                        </text>
+
+                        {/* SECTOR 3: SOUTH STAND (BOTTOM ARC - GREEN) */}
+                        <path
+                          d="M 415 415 A 205 205 0 0 1 125 415 L 192 348 A 110 110 0 0 0 348 348 Z"
+                          fill="rgba(22, 163, 74, 0.24)"
+                          stroke="#16a34a"
+                          strokeWidth="1.5"
+                        />
+                        <text
+                          x="270"
+                          y="464"
+                          textAnchor="middle"
+                          fill="#4ade80"
+                          fontSize="11"
+                          fontWeight="bold"
+                          letterSpacing="1"
+                        >
+                          SOUTH STAND
+                        </text>
+                        <text
+                          x="270"
+                          y="478"
+                          textAnchor="middle"
+                          fill="#94a3b8"
+                          fontSize="9"
+                          fontWeight="bold"
+                        >
+                          (₹2,000)
+                        </text>
+
+                        {/* SECTOR 4: VIP BOX (BOTTOM CENTER - CHARCOAL & GOLD) */}
+                        <path
+                          d="M 220 376 A 148 148 0 0 1 320 376 L 312 410 A 176 176 0 0 0 228 410 Z"
+                          fill="#1e293b"
+                          stroke="#eab308"
+                          strokeWidth="2"
+                        />
+                        <text
+                          x="270"
+                          y="400"
+                          textAnchor="middle"
+                          fill="#facc15"
+                          fontSize="9.5"
+                          fontWeight="bold"
+                          letterSpacing="1"
+                        >
+                          VIP BOX
+                        </text>
+                        <text
+                          x="270"
+                          y="412"
+                          textAnchor="middle"
+                          fill="#fef08a"
+                          fontSize="8"
+                          fontWeight="bold"
+                        >
+                          (₹3,500)
+                        </text>
+
+                        {/* SECTOR 5: WEST STAND (LEFT ARC - PURPLE/VIOLET) */}
+                        <path
+                          d="M 125 415 A 205 205 0 0 1 125 125 L 192 192 A 110 110 0 0 0 192 348 Z"
+                          fill="rgba(124, 58, 237, 0.22)"
+                          stroke="#7c3aed"
+                          strokeWidth="1.5"
+                        />
+                        <text
+                          x="66"
+                          y="266"
+                          textAnchor="middle"
+                          fill="#c084fc"
+                          fontSize="11"
+                          fontWeight="bold"
+                          letterSpacing="1"
+                        >
+                          WEST STAND
+                        </text>
+                        <text
+                          x="66"
+                          y="280"
+                          textAnchor="middle"
+                          fill="#94a3b8"
+                          fontSize="9"
+                          fontWeight="bold"
+                        >
+                          (₹1,500)
+                        </text>
+
+                        {/* CENTRAL CRICKET GROUND (OUTFIELD) */}
+                        <circle
+                          cx="270"
+                          cy="270"
+                          r="108"
+                          fill="url(#turfGradient)"
+                          stroke="#ffffff"
+                          strokeWidth="1.5"
+                          strokeOpacity="0.45"
+                        />
+
+                        {/* Concentric Mowing Rings for realism */}
+                        <circle
+                          cx="270"
+                          cy="270"
+                          r="82"
+                          fill="none"
+                          stroke="#2d6a4f"
+                          strokeWidth="7"
+                          opacity="0.25"
+                        />
+                        <circle
+                          cx="270"
+                          cy="270"
+                          r="52"
+                          fill="none"
+                          stroke="#40916c"
+                          strokeWidth="6"
+                          opacity="0.2"
+                        />
+
+                        {/* 30-Yard Fielding Circle */}
+                        <circle
+                          cx="270"
+                          cy="270"
+                          r="72"
+                          fill="none"
+                          stroke="#ffffff"
+                          strokeWidth="1.2"
+                          strokeDasharray="4 4"
+                          strokeOpacity="0.6"
+                        />
+
+                        {/* Central Turf Cricket Pitch Strip */}
+                        <rect
+                          x="259"
+                          y="238"
+                          width="22"
+                          height="64"
+                          rx="2"
+                          fill="#c29b62"
+                          stroke="#8d6e46"
+                          strokeWidth="1"
+                        />
+
+                        {/* Batting Creases & Wickets */}
+                        <line
+                          x1="257"
+                          y1="248"
+                          x2="283"
+                          y2="248"
+                          stroke="#ffffff"
+                          strokeWidth="1.2"
+                        />
+                        <line
+                          x1="257"
+                          y1="292"
+                          x2="283"
+                          y2="292"
+                          stroke="#ffffff"
+                          strokeWidth="1.2"
+                        />
+                        {/* Wickets Top */}
+                        <circle cx="266" cy="245" r="1" fill="#ffffff" />
+                        <circle cx="270" cy="245" r="1" fill="#ffffff" />
+                        <circle cx="274" cy="245" r="1" fill="#ffffff" />
+                        {/* Wickets Bottom */}
+                        <circle cx="266" cy="295" r="1" fill="#ffffff" />
+                        <circle cx="270" cy="295" r="1" fill="#ffffff" />
+                        <circle cx="274" cy="295" r="1" fill="#ffffff" />
+
+                        {/* INTERACTIVE RADIAL SEATS */}
+                        {ALL_RADIAL_SEATS.map((seat) => {
+                          const isSelected = selectedSeatIds.includes(seat.id);
+                          const isSold = seat.status === "sold";
+                          const isPremium = seat.status === "premium";
+
+                          let fillColor = "#22c55e"; // available: green
+                          if (isSold) fillColor = "#ef4444"; // sold: red
+                          if (isPremium) fillColor = "#eab308"; // premium: gold
+                          if (isSelected) fillColor = "#00e5ff"; // selected: cyan
+
+                          return (
+                            <g
+                              key={seat.id}
+                              className={`seat-node ${isSold ? "disabled" : "clickable"}`}
+                              onClick={() => toggleSeatSelection(seat)}
+                              onMouseEnter={() => setHoveredSeat(seat)}
+                              onMouseLeave={() => setHoveredSeat(null)}
+                            >
+                              {/* Glowing selection ring */}
+                              {isSelected && (
+                                <circle
+                                  cx={seat.cx}
+                                  cy={seat.cy}
+                                  r="9.5"
+                                  fill="none"
+                                  stroke="#00e5ff"
+                                  strokeWidth="2.5"
+                                  filter="url(#seatGlow)"
+                                />
+                              )}
+                              {/* The clickable Seat dot */}
+                              <circle
+                                cx={seat.cx}
+                                cy={seat.cy}
+                                r={isSelected ? 6.5 : 5.5}
+                                fill={fillColor}
+                                stroke={isSelected ? "#ffffff" : "rgba(0,0,0,0.5)"}
+                                strokeWidth={isSelected ? 1.5 : 0.8}
+                                style={{
+                                  cursor: isSold ? "not-allowed" : "pointer",
+                                  transition: "all 0.15s ease",
+                                }}
+                              />
+                            </g>
+                          );
+                        })}
+                      </svg>
+                    </div>
+
+                    {/* Hover Tooltip */}
+                    {hoveredSeat && (
+                      <div className="seat-hover-tooltip">
+                        <strong>Seat {hoveredSeat.label}</strong>
+                        <span>{hoveredSeat.stand}</span>
+                        <b>₹{hoveredSeat.price.toLocaleString()}</b>
+                        <small className={`status-pill ${hoveredSeat.status}`}>
+                          {hoveredSeat.status.toUpperCase()}
+                        </small>
+                      </div>
+                    )}
+
+                    {/* Floating Zoom Controls (+ / -) */}
+                    <div className="stadium-zoom-controls">
+                      <button
+                        type="button"
+                        className="zoom-btn"
+                        onClick={handleZoomIn}
+                        title="Zoom In"
+                      >
+                        +
+                      </button>
+                      <button
+                        type="button"
+                        className="zoom-btn"
+                        onClick={handleZoomOut}
+                        title="Zoom Out"
+                      >
+                        −
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* RIGHT COLUMN: ORDER SUMMARY PANEL */}
+                <div className="order-summary-panel">
+                  {/* Top Match Summary Card */}
+                  <div className="summary-match-card">
+                    <h3>{selectedMatch.team1} vs {selectedMatch.team2}</h3>
+                    <p>{selectedMatch.date} • {selectedMatch.time}</p>
+                    <small>{selectedMatch.stadium}, {selectedMatch.city.split(",")[0]}</small>
+                  </div>
+
+                  {/* Selected Seats List */}
+                  <div className="summary-seats-section">
+                    <h4>Selected Seats</h4>
+                    {selectedSeatsObjects.length === 0 ? (
+                      <p className="no-seats-hint">
+                        No seats selected. Click any available seat on the stadium map to add.
+                      </p>
+                    ) : (
+                      <div className="selected-seats-list">
+                        {selectedSeatsObjects.map((seat) => (
+                          <div key={seat.id} className="selected-seat-chip">
+                            <span className="seat-id-tag">{seat.label}</span>
+                            <span className="seat-cost-tag">₹{seat.price.toLocaleString()}</span>
+                            <button
+                              type="button"
+                              className="remove-chip-btn"
+                              onClick={() => removeSelectedSeat(seat.id)}
+                              title="Remove Seat"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Financial Breakdown */}
+                  <div className="summary-pricing-section">
+                    <div className="price-row">
+                      <span>Subtotal</span>
+                      <strong>₹{subtotal.toLocaleString()}</strong>
+                    </div>
+                    <div className="price-row">
+                      <span>Convenience Fee</span>
+                      <strong>₹{convenienceFee.toLocaleString()}</strong>
+                    </div>
+                    <div className="price-row total-row">
+                      <span>Total</span>
+                      <strong>₹{grandTotal.toLocaleString()}</strong>
+                    </div>
+                  </div>
+
+                  {/* Proceed to Payment Action Button */}
+                  <button
+                    type="button"
+                    disabled={selectedSeatsObjects.length === 0}
+                    className="proceed-payment-cta"
+                    onClick={handleConfirmReservation}
+                  >
+                    Proceed to Payment ➔
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Fallback if user arrives at booking before picking a fixture */}
+          {bookingStage === "fixtures" && (
+            <div className="no-match-selected-box">
+              <p>Please select a fixture from the matches list above to view stadium details and pick seats.</p>
+              <a href="#fixtures" className="tactical-cta primary">
+                BROWSE FIXTURES ABOVE ↑
+              </a>
+            </div>
+          )}
         </div>
-
       </section>
 
+      {/* ACCORDION FAQ */}
+      <section id="faq" className="chapter-section faq-section">
+        <div className="section-content full-width">
+          <p className="tactical-tag">[ FREQUENTLY ASKED QUESTIONS ]</p>
+          <h2>QUESTIONS & ANSWERS.</h2>
+          <p className="section-intro">Tap any question below to expand its details.</p>
 
-      {/* =================================
-          FINAL CTA
-      ================================= */}
+          <div className="faq-accordion">
+            {[
+              {
+                q: "HOW DO I VIEW STADIUM DETAILS BEFORE SELECTING SEATS?",
+                a: "Click 'VIEW STADIUM & BOOK' on any match fixture. You will enter the Match Details page featuring stadium photos, capacity, amenities, pitch report, and event guidelines before opening the seat selector.",
+              },
+              {
+                q: "HOW DOES THE CIRCULAR STADIUM SEAT MAP WORK?",
+                a: "The circular map renders the stadium bowl encircling the pitch. Stands are color-coded (North, East, South, VIP, West). Click any green or gold seat dot to select it; your selection updates in real time on the summary panel.",
+              },
+              {
+                q: "HOW DO I ZOOM IN ON THE STADIUM MAP?",
+                a: "Use the floating '+' and '−' circle buttons located at the bottom-right corner of the stadium map to zoom in for precise seat picking.",
+              },
+              {
+                q: "WHERE IS THE 3D STADIUM SIGHTSCREEN SCOREBOARD?",
+                a: "The 3D sightscreen scoreboard is mounted on the turf pitch directly behind the bowling wickets. It reflects whichever match you select dynamically.",
+              },
+            ].map((faq, idx) => {
+              const isOpen = openFaq === idx;
+              return (
+                <div
+                  key={idx}
+                  className={`faq-card ${isOpen ? "open" : ""}`}
+                  onClick={() => setOpenFaq(isOpen ? null : idx)}
+                >
+                  <div className="faq-question">
+                    <span>0{idx + 1}</span>
+                    <strong>{faq.q}</strong>
+                    <b>{isOpen ? "−" : "+"}</b>
+                  </div>
+                  {isOpen && <p className="faq-answer">{faq.a}</p>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
 
-      <section className="final-section">
-
-        <p className="eyebrow">
-          YOUR SEAT IS WAITING
-        </p>
-
-        <h2>
-          SEE YOU
-          <br />
+      {/* FOOTER */}
+      <footer className="tactical-footer">
+        <div className="footer-marquee">
           <span>
-            AT THE GAME.
+            /// CRICTIX ARENA ONLINE • GROUND SIGHTSCREEN SCOREBOARD • INSTANT CRYPTOGRAPHIC DISPATCH ///
           </span>
-        </h2>
-
-        <button
-          onClick={() =>
-            setSelectedMatch(matches[0])
-          }
-          className="primary-button large"
-        >
-          GET YOUR TICKET
-          <span>↗</span>
-        </button>
-
-      </section>
-
-
-      {/* =================================
-          FOOTER
-      ================================= */}
-
-      <footer>
-
-        <div className="footer-logo">
-          CRIC<span>TIX</span>
         </div>
-
-        <p>
-          LIVE THE GAME.
-        </p>
-
-        <span>
-          © 2026 CRICTIX
-        </span>
-
+        <div className="footer-bottom">
+          <div>
+            <strong>CRICK<span>TIX</span></strong>
+            <small>© 2026 CRICKTIX GLOBAL. ALL RIGHTS RESERVED.</small>
+          </div>
+          <div className="footer-status">
+            <span>USER: @{userProfile.username}</span>
+            <span>MEMBERSHIP: {userProfile.loyaltyTier}</span>
+          </div>
+        </div>
       </footer>
 
+      {/* USER PROFILE MODAL */}
+      {profileModalOpen && (
+        <div className="modal-backdrop" onClick={() => setProfileModalOpen(false)}>
+          <div className="tactical-modal profile-modal" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-close" onClick={() => setProfileModalOpen(false)}>✕</button>
 
-      {/* =================================
-          BOOKING MODAL
-      ================================= */}
-
-      {selectedMatch && (
-
-        <div className="booking-overlay">
-
-          <div className="booking-modal">
-
-            <button
-              className="close"
-              onClick={() =>
-                setSelectedMatch(null)
-              }
-            >
-              ×
-            </button>
-
-            <p className="eyebrow">
-              SELECT YOUR SEAT
-            </p>
-
-            <h2>
-              {selectedMatch.team1}
-              {" "}
-              <span>VS</span>
-              {" "}
-              {selectedMatch.team2}
-            </h2>
-
-            <p className="modal-location">
-              {selectedMatch.stadium}
-              {" · "}
-              {selectedMatch.date}
-            </p>
-
-            <div className="pitch">
-              PITCH
-            </div>
-
-            <div className="seat-map">
-
-              {Array.from({
-                length: 36,
-              }).map((_, index) => (
-
-                <button
-                  key={index}
-                  className={
-                    index === 4 ||
-                    index === 10 ||
-                    index === 17 ||
-                    index === 25
-                      ? "booked"
-                      : ""
-                  }
-                >
-                  {index + 1}
-                </button>
-
-              ))}
-
-            </div>
-
-            <div className="booking-bottom">
-
+            <div className="profile-header">
+              <div className="profile-avatar">🏏</div>
               <div>
+                <h2>FAN PROFILE DOSSIER</h2>
+                <p>Manage your account credentials and personal preferences</p>
+                <span className="loyalty-pill">★ {userProfile.loyaltyTier} ({userProfile.loyaltyPoints} PTS)</span>
+              </div>
+            </div>
 
-                <small>
-                  STARTING FROM
-                </small>
+            {profileSuccessMsg && <div className="profile-alert-success">{profileSuccessMsg}</div>}
 
-                <strong>
-                  ₹{selectedMatch.price}
-                </strong>
-
+            <form onSubmit={handleSaveProfile} className="profile-form">
+              <div className="profile-grid">
+                <div>
+                  <label>USERNAME</label>
+                  <input
+                    type="text"
+                    value={userProfile.username}
+                    onChange={(e) => setUserProfile({ ...userProfile, username: e.target.value })}
+                    required
+                  />
+                </div>
+                <div>
+                  <label>FULL NAME</label>
+                  <input
+                    type="text"
+                    value={userProfile.fullName}
+                    onChange={(e) => setUserProfile({ ...userProfile, fullName: e.target.value })}
+                    required
+                  />
+                </div>
+                <div>
+                  <label>DATE OF BIRTH</label>
+                  <input
+                    type="date"
+                    value={userProfile.dob}
+                    onChange={(e) => setUserProfile({ ...userProfile, dob: e.target.value })}
+                    required
+                  />
+                </div>
+                <div>
+                  <label>CONTACT PHONE</label>
+                  <input
+                    type="tel"
+                    value={userProfile.phone}
+                    onChange={(e) => setUserProfile({ ...userProfile, phone: e.target.value })}
+                    required
+                  />
+                </div>
+                <div>
+                  <label>EMAIL ADDRESS</label>
+                  <input
+                    type="email"
+                    value={userProfile.email}
+                    onChange={(e) => setUserProfile({ ...userProfile, email: e.target.value })}
+                    required
+                  />
+                </div>
+                <div>
+                  <label>FAVORITE TEAM</label>
+                  <select
+                    value={userProfile.favoriteTeam}
+                    onChange={(e) => setUserProfile({ ...userProfile, favoriteTeam: e.target.value })}
+                  >
+                    <option value="Team India">Team India (National)</option>
+                    <option value="Royal Challengers Bengaluru">Royal Challengers Bengaluru (RCB)</option>
+                    <option value="Mumbai Indians">Mumbai Indians (MI)</option>
+                    <option value="Chennai Super Kings">Chennai Super Kings (CSK)</option>
+                    <option value="Kolkata Knight Riders">Kolkata Knight Riders (KKR)</option>
+                  </select>
+                </div>
               </div>
 
-              <button
-                onClick={() =>
-                  setSelectedMatch(null)
-                }
-              >
-                CONTINUE →
-              </button>
-
-            </div>
-
+              <div className="profile-actions">
+                <button type="button" className="tactical-cta ghost" onClick={() => setProfileModalOpen(false)}>
+                  CLOSE
+                </button>
+                <button type="submit" className="tactical-cta primary">
+                  SAVE PROFILE DETAILS ➔
+                </button>
+              </div>
+            </form>
           </div>
-
         </div>
-
       )}
 
+      {/* CONFIRMED PASS VOUCHER MODAL */}
+      {confirmedPass && (
+        <div className="modal-backdrop" onClick={() => setConfirmedPass(null)}>
+          <div className="tactical-modal" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-close" onClick={() => setConfirmedPass(null)}>✕</button>
+
+            <div className="pass-confirmed-header">
+              <span className="verified-badge">✓ TICKET PASS DISPATCHED</span>
+              <h2>BOOKING AUTHORIZED</h2>
+              <p>PNR RECORD: <strong>{confirmedPass.pnr}</strong></p>
+            </div>
+
+            <div className="ticket-voucher">
+              <div className="voucher-top">
+                <span>CRICKTIX // OFFICIAL ENTRY PASS</span>
+                <strong>VERIFIED ACCESS</strong>
+              </div>
+              <div className="voucher-clash">
+                <h3>{confirmedPass.match.team1} VS {confirmedPass.match.team2}</h3>
+                <p>{confirmedPass.match.stadium}</p>
+                <small>{confirmedPass.match.date} • {confirmedPass.match.time}</small>
+              </div>
+
+              <div className="voucher-grid">
+                <div>
+                  <span>SEATS</span>
+                  <strong>{confirmedPass.seats.map((s: StadiumSeat) => s.label).join(", ")}</strong>
+                </div>
+                <div>
+                  <span>PASS HOLDER</span>
+                  <strong>{confirmedPass.holder}</strong>
+                </div>
+                <div>
+                  <span>INVESTMENT</span>
+                  <strong>₹{confirmedPass.totalAmount.toLocaleString()}</strong>
+                </div>
+              </div>
+
+              <div className="voucher-qr">
+                <div className="qr-box">
+                  <div className="qr-simulated" />
+                </div>
+                <small>OPTICAL TURNSTILE SCAN READY</small>
+              </div>
+            </div>
+
+            <div className="success-actions">
+              <button className="tactical-cta ghost" onClick={() => setConfirmedPass(null)}>
+                CLOSE
+              </button>
+              <button className="tactical-cta primary" onClick={() => window.print()}>
+                PRINT / DOWNLOAD PASS 📄
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* WALLET / MY BOOKINGS DRAWER */}
+      {myTicketsDrawerOpen && (
+        <div className="modal-backdrop" onClick={() => setMyTicketsDrawerOpen(false)}>
+          <div className="tactical-modal" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-close" onClick={() => setMyTicketsDrawerOpen(false)}>✕</button>
+
+            <div className="modal-header">
+              <span className="tactical-tag">[ MY RESERVED PASSES ]</span>
+              <h2>BOOKED TICKETS ({bookedPasses.length})</h2>
+              <p>Your active match credentials stored in your browser</p>
+            </div>
+
+            {bookedPasses.length === 0 ? (
+              <div className="empty-passes">
+                <p>No tickets booked yet.</p>
+                <button
+                  type="button"
+                  className="tactical-cta primary"
+                  onClick={() => {
+                    setMyTicketsDrawerOpen(false);
+                    setBookingStage("fixtures");
+                  }}
+                >
+                  CHOOSE A MATCH TO BOOK →
+                </button>
+              </div>
+            ) : (
+              <div className="saved-passes-list">
+                {bookedPasses.map((p, idx) => (
+                  <div key={idx} className="saved-pass-card">
+                    <div>
+                      <strong>{p.match.team1} VS {p.match.team2}</strong>
+                      <small>{p.match.stadium} • {p.match.date}</small>
+                      <span className="pnr-pill">PNR: {p.pnr}</span>
+                    </div>
+                    <div className="pass-card-right">
+                      <span>SEATS: {p.seats.map((s: StadiumSeat) => s.label).join(", ")}</span>
+                      <b>₹{p.totalAmount.toLocaleString()}</b>
+                      <button className="print-mini-btn" onClick={() => window.print()}>
+                        PRINT
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-
-export default App;
