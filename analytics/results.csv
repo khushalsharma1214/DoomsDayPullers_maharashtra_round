@@ -1,0 +1,5 @@
+Test,Total Requests,Successful,Failed,Throughput (req/s),Average Latency (ms),Median Latency (ms),Normal Tickets,Bot Tickets
+Baseline,60,10,50,255.32,49.80,22.50,10,0
+Bot Flood,300,10,290,847.46,73.64,14,10,0
+Randomized Flash Crowd,300,10,290,787.40,294.07,294,3,7
+High Concurrency,1500,10,1490,964.01,1191.91,1231.50,5,5
