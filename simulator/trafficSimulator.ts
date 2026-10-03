@@ -1,4 +1,5 @@
 const EVENT_ID = 1;
+const TOTAL_SEATS = 10;
 
 const NORMAL_USERS = 100;
 const BOT_USERS = 20;
@@ -30,31 +31,23 @@ TEST MODES
 4 = High Concurrency
 */
 
-const TEST_MODE =
-    Number(process.argv[2]) || 3;
+const TEST_MODE = Number(process.argv[2]) || 3;
 
 function shuffle<T>(array: T[]): T[] {
-
     const result = [...array];
 
-    for (
-        let i = result.length - 1;
-        i > 0;
-        i--
-    ) {
+    for (let i = result.length - 1; i > 0; i--) {
+        const j = Math.floor(
+            Math.random() * (i + 1)
+        );
 
-        const j =
-            Math.floor(
-                Math.random() * (i + 1)
-            );
+        const current = result[i];
+        const selected = result[j];
 
-        [
-            result[i],
-            result[j]
-        ] = [
-            result[j],
-            result[i]
-        ];
+        if (current !== undefined && selected !== undefined) {
+            result[i] = selected;
+            result[j] = current;
+        }
     }
 
     return result;
@@ -67,7 +60,6 @@ async function sendRequest(
     const startTime = Date.now();
 
     try {
-
         const response = await fetch(
             "http://localhost:3000/api/purchase/reserve",
             {
@@ -84,54 +76,33 @@ async function sendRequest(
             }
         );
 
-        const data =
-            await response.json();
+        const data = await response.json();
 
         return {
-
             userId: job.userId,
-
             type: job.type,
-
             status: response.status,
-
             success: data.success,
-
-            seatNumber:
-                data.seatNumber ?? null,
-
-            message:
-                data.message ?? null,
-
-            latency:
-                Date.now() - startTime
+            seatNumber: data.seatNumber ?? null,
+            message: data.message ?? null,
+            latency: Date.now() - startTime
         };
 
     } catch {
 
         return {
-
             userId: job.userId,
-
             type: job.type,
-
             status: 0,
-
             success: false,
-
             seatNumber: null,
-
             message: "Request failed",
-
-            latency:
-                Date.now() - startTime
+            latency: Date.now() - startTime
         };
     }
 }
 
-function average(
-    values: number[]
-) {
+function average(values: number[]): number {
 
     if (values.length === 0) {
         return 0;
@@ -139,42 +110,38 @@ function average(
 
     return (
         values.reduce(
-            (sum, value) =>
-                sum + value,
+            (sum, value) => sum + value,
             0
         ) / values.length
     );
 }
 
-function median(
-    values: number[]
-) {
+function median(values: number[]): number {
 
     if (values.length === 0) {
         return 0;
     }
 
-    const sorted =
-        [...values].sort(
-            (a, b) => a - b
-        );
+    const sorted = [...values].sort(
+        (a, b) => a - b
+    );
 
-    const middle =
-        Math.floor(
-            sorted.length / 2
-        );
+    const middle = Math.floor(
+        sorted.length / 2
+    );
 
-    if (
-        sorted.length % 2 === 0
-    ) {
+    if (sorted.length % 2 === 0) {
+        const lower = sorted[middle - 1];
+        const upper = sorted[middle];
 
-        return (
-            sorted[middle - 1] +
-            sorted[middle]
-        ) / 2;
+        if (lower === undefined || upper === undefined) {
+            return 0;
+        }
+
+        return (lower + upper) / 2;
     }
 
-    return sorted[middle];
+    return sorted[middle] ?? 0;
 }
 
 function createJobs(): RequestJob[] {
@@ -195,7 +162,6 @@ function createJobs(): RequestJob[] {
             userId <= NORMAL_USERS;
             userId++
         ) {
-
             jobs.push({
                 userId,
                 type: "NORMAL"
@@ -220,7 +186,6 @@ function createJobs(): RequestJob[] {
             userId <= NORMAL_USERS;
             userId++
         ) {
-
             jobs.push({
                 userId,
                 type: "NORMAL"
@@ -233,15 +198,13 @@ function createJobs(): RequestJob[] {
             i++
         ) {
 
-            const userId =
-                1000 + i;
+            const userId = 1000 + i;
 
             for (
                 let attempt = 0;
                 attempt < BOT_ATTEMPTS;
                 attempt++
             ) {
-
                 jobs.push({
                     userId,
                     type: "BOT"
@@ -264,7 +227,6 @@ function createJobs(): RequestJob[] {
             userId <= NORMAL_USERS;
             userId++
         ) {
-
             jobs.push({
                 userId,
                 type: "NORMAL"
@@ -277,15 +239,13 @@ function createJobs(): RequestJob[] {
             i++
         ) {
 
-            const userId =
-                1000 + i;
+            const userId = 1000 + i;
 
             for (
                 let attempt = 0;
                 attempt < BOT_ATTEMPTS;
                 attempt++
             ) {
-
                 jobs.push({
                     userId,
                     type: "BOT"
@@ -310,7 +270,6 @@ function createJobs(): RequestJob[] {
             userId <= 500;
             userId++
         ) {
-
             jobs.push({
                 userId,
                 type: "NORMAL"
@@ -323,15 +282,13 @@ function createJobs(): RequestJob[] {
             i++
         ) {
 
-            const userId =
-                1000 + i;
+            const userId = 1000 + i;
 
             for (
                 let attempt = 0;
                 attempt < 10;
                 attempt++
             ) {
-
                 jobs.push({
                     userId,
                     type: "BOT"
@@ -364,13 +321,9 @@ async function runSimulation() {
     );
 
     const modeNames: Record<number, string> = {
-
         1: "BASELINE",
-
         2: "BOT FLOOD",
-
         3: "RANDOMIZED FLASH CROWD",
-
         4: "HIGH CONCURRENCY"
     };
 
@@ -381,20 +334,15 @@ async function runSimulation() {
         }`
     );
 
-    const jobs =
-        createJobs();
+    const jobs = createJobs();
 
-    const normalJobs =
-        jobs.filter(
-            job =>
-                job.type === "NORMAL"
-        );
+    const normalJobs = jobs.filter(
+        job => job.type === "NORMAL"
+    );
 
-    const botJobs =
-        jobs.filter(
-            job =>
-                job.type === "BOT"
-        );
+    const botJobs = jobs.filter(
+        job => job.type === "BOT"
+    );
 
     console.log(
         `Normal requests: ${
@@ -415,23 +363,26 @@ async function runSimulation() {
     );
 
     console.log(
+        `Available test tickets: ${
+            TOTAL_SEATS
+        }`
+    );
+
+    console.log(
         "\nSending requests...\n"
     );
 
-    const simulationStart =
-        Date.now();
+    const simulationStart = Date.now();
 
     /*
     All requests start concurrently.
     */
 
-    const results =
-        await Promise.all(
-            jobs.map(
-                job =>
-                    sendRequest(job)
-            )
-        );
+    const results = await Promise.all(
+        jobs.map(
+            job => sendRequest(job)
+        )
+    );
 
     const totalTime =
         Date.now() -
@@ -444,15 +395,13 @@ async function runSimulation() {
     const normalResults =
         results.filter(
             result =>
-                result.type ===
-                "NORMAL"
+                result.type === "NORMAL"
         );
 
     const botResults =
         results.filter(
             result =>
-                result.type ===
-                "BOT"
+                result.type === "BOT"
         );
 
     const normalSuccess =
@@ -515,9 +464,7 @@ async function runSimulation() {
     const failures =
         new Map<string, number>();
 
-    for (
-        const result of results
-    ) {
+    for (const result of results) {
 
         if (!result.success) {
 
@@ -528,9 +475,7 @@ async function runSimulation() {
             failures.set(
                 reason,
                 (
-                    failures.get(
-                        reason
-                    ) ?? 0
+                    failures.get(reason) ?? 0
                 ) + 1
             );
         }
@@ -547,10 +492,12 @@ async function runSimulation() {
         successful;
 
     const throughput =
-        (
-            results.length /
-            totalTime
-        ) * 1000;
+        totalTime === 0
+            ? 0
+            : (
+                results.length /
+                totalTime
+            ) * 1000;
 
     // -------------------------
     // REPORT
@@ -612,11 +559,13 @@ async function runSimulation() {
 
     console.log(
         `Success rate: ${
-            (
-                normalSuccess.length /
-                normalResults.length *
-                100
-            ).toFixed(2)
+            normalResults.length === 0
+                ? "N/A"
+                : (
+                    normalSuccess.length /
+                    normalResults.length *
+                    100
+                ).toFixed(2)
         }%`
     );
 
@@ -713,7 +662,8 @@ async function runSimulation() {
 
     console.log(
         `Overselling detected: ${
-            tickets.length > 10
+            tickets.length >
+            TOTAL_SEATS
         }`
     );
 
@@ -743,17 +693,21 @@ async function runSimulation() {
 
     console.log(
         `Minimum: ${
-            Math.min(
-                ...allLatencies
-            )
+            allLatencies.length === 0
+                ? 0
+                : Math.min(
+                    ...allLatencies
+                )
         } ms`
     );
 
     console.log(
         `Maximum: ${
-            Math.max(
-                ...allLatencies
-            )
+            allLatencies.length === 0
+                ? 0
+                : Math.max(
+                    ...allLatencies
+                )
         } ms`
     );
 
@@ -765,11 +719,14 @@ async function runSimulation() {
         "\n========== FAILURE REASONS =========="
     );
 
+    if (failures.size === 0) {
+        console.log("None");
+    }
+
     for (
         const [reason, count]
         of failures
     ) {
-
         console.log(
             `${reason}: ${count}`
         );

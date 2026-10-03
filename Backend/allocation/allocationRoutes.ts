@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { reserveSeat } from "./seatService";
+import { reserveSeat } from "./seatService.js";
 
 const router = Router();
 

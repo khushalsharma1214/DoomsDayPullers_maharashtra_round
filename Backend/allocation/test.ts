@@ -1,4 +1,4 @@
-import { reserveSeat } from "./seatService";
+import { reserveSeat } from "./seatService.js";
 
 async function test() {
     try {

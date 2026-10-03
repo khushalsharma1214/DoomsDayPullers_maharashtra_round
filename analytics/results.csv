@@ -2,4 +2,4 @@ Test,Total Requests,Successful,Failed,Throughput (req/s),Average Latency (ms),Me
 Baseline,60,10,50,255.32,49.80,22.50,10,0
 Bot Flood,300,10,290,847.46,73.64,14,10,0
 Randomized Flash Crowd,300,10,290,914.63,240.23,242.50,4,6
-High Concurrency,1500,10,1490,1981.51,599.96,614,1,9
+High Concurrency,1500,10,1490,1018.33,1146.68,1167,3,7

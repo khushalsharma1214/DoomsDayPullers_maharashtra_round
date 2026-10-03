@@ -1,6 +1,6 @@
 import express from "express";
-import allocationRoutes from "./allocation/allocationRoutes";
-import { expireReservations } from "./allocation/reservationService";
+import allocationRoutes from "./allocation/allocationRoutes.js";
+import { expireReservations } from "./allocation/reservationService.js";
 
 const app = express();
 

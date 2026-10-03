@@ -1,7 +1,7 @@
 console.log("EXPIRY TEST STARTED");
 
-import { expireReservations } from "./reservationService";
-import { pool } from "./db";
+import { expireReservations } from "./reservationService.js";
+import { pool } from "./db.js";
 
 async function test() {
     try {
