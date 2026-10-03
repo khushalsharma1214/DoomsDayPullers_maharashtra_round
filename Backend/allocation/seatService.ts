@@ -10,20 +10,83 @@ export async function reserveSeat(
     try {
         await client.query("BEGIN");
 
-        const existingReservation = await client.query(
+        /*
+         * Lock any existing RESERVED reservations for this user.
+         *
+         * This prevents a race between:
+         * - a user trying to reserve again
+         * - the background expiry worker cleaning up the old reservation
+         *
+         * If the reservation has already expired, we clean it up here
+         * before attempting a new allocation.
+         */
+        const existingReservations = await client.query(
             `
-            SELECT id, seat_id
+            SELECT id, seat_id, expires_at
             FROM reservations
             WHERE event_id = $1
             AND user_id = $2
             AND status = 'RESERVED'
-            AND expires_at > NOW()
+            FOR UPDATE
+            `,
+            [eventId, userId]
+        );
+
+        for (const reservation of existingReservations.rows) {
+            const expiresAt = reservation.expires_at
+                ? new Date(reservation.expires_at).getTime()
+                : null;
+
+            const isExpired =
+                expiresAt !== null &&
+                expiresAt <= Date.now();
+
+            if (isExpired) {
+                await client.query(
+                    `
+                    UPDATE reservations
+                    SET status = 'EXPIRED'
+                    WHERE id = $1
+                    `,
+                    [reservation.id]
+                );
+
+                await client.query(
+                    `
+                    UPDATE seats
+                    SET status = 'AVAILABLE',
+                        user_id = NULL,
+                        reservation_id = NULL
+                    WHERE id = $1
+                    `,
+                    [reservation.seat_id]
+                );
+            }
+        }
+
+        /*
+         * Check again for an active reservation.
+         *
+         * The row locks above ensure that an expiry operation cannot
+         * race with this check for the same reservation.
+         */
+        const activeReservation = await client.query(
+            `
+            SELECT id
+            FROM reservations
+            WHERE event_id = $1
+            AND user_id = $2
+            AND status = 'RESERVED'
+            AND (
+                expires_at IS NULL
+                OR expires_at > NOW()
+            )
             LIMIT 1
             `,
             [eventId, userId]
         );
 
-        if (existingReservation.rows.length > 0) {
+        if (activeReservation.rows.length > 0) {
             await client.query("ROLLBACK");
 
             return {
@@ -32,6 +95,12 @@ export async function reserveSeat(
             };
         }
 
+        /*
+         * Find one available seat.
+         *
+         * FOR UPDATE SKIP LOCKED allows many concurrent users to
+         * allocate different seats without waiting for each other.
+         */
         const result = await client.query(
             `
             SELECT id, seat_number
@@ -60,6 +129,9 @@ export async function reserveSeat(
         const reservationMinutes =
             Number(process.env.RESERVATION_MINUTES) || 5;
 
+        /*
+         * Mark the seat as reserved.
+         */
         await client.query(
             `
             UPDATE seats
@@ -71,6 +143,9 @@ export async function reserveSeat(
             [userId, reservationId, seat.id]
         );
 
+        /*
+         * Create the reservation with an expiry time.
+         */
         await client.query(
             `
             INSERT INTO reservations
@@ -112,9 +187,12 @@ export async function reserveSeat(
     } catch (error: any) {
         await client.query("ROLLBACK");
 
-        // PostgreSQL unique constraint violation.
-        // This can happen if two requests from the same user
-        // race each other at the same time.
+        /*
+         * PostgreSQL unique constraint violation.
+         *
+         * This protects against two simultaneous requests from the
+         * same user attempting to create multiple active reservations.
+         */
         if (error?.code === "23505") {
             return {
                 success: false,

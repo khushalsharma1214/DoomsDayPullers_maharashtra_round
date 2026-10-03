@@ -4,30 +4,58 @@
 -- Event 2: 500 tickets
 
 INSERT INTO events (name, total_seats)
-VALUES
-    ('Fair Drop Test Event', 10),
-    ('Fair Drop 500 Cricket Tickets Stress Test', 500)
-ON CONFLICT DO NOTHING;
+SELECT
+    'Fair Drop Test Event',
+    10
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM events
+    WHERE name = 'Fair Drop Test Event'
+);
+
+INSERT INTO events (name, total_seats)
+SELECT
+    'Fair Drop 500 Cricket Tickets Stress Test',
+    500
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM events
+    WHERE name = 'Fair Drop 500 Cricket Tickets Stress Test'
+);
 
 
--- Create 10 seats for Event 1
+-- Create seats for the 10-ticket test event
 INSERT INTO seats (event_id, seat_number, status)
 SELECT
-    1,
-    'A' || LPAD(generate_series::text, 3, '0'),
+    e.id,
+    'A' || LPAD(gs::text, 3, '0'),
     'AVAILABLE'
-FROM generate_series(1, 10)
-ON CONFLICT DO NOTHING;
+FROM events e
+CROSS JOIN generate_series(1, 10) AS gs
+WHERE e.name = 'Fair Drop Test Event'
+AND NOT EXISTS (
+    SELECT 1
+    FROM seats s
+    WHERE s.event_id = e.id
+    AND s.seat_number = 'A' || LPAD(gs::text, 3, '0')
+);
 
 
--- Create 500 seats for Event 2
+-- Create seats for the 500-ticket stress-test event
 INSERT INTO seats (event_id, seat_number, status)
 SELECT
-    2,
-    'A' || LPAD(generate_series::text, 3, '0'),
+    e.id,
+    'A' || LPAD(gs::text, 3, '0'),
     'AVAILABLE'
-FROM generate_series(1, 500)
-ON CONFLICT DO NOTHING;
+FROM events e
+CROSS JOIN generate_series(1, 500) AS gs
+WHERE e.name = 'Fair Drop 500 Cricket Tickets Stress Test'
+AND NOT EXISTS (
+    SELECT 1
+    FROM seats s
+    WHERE s.event_id = e.id
+    AND s.seat_number = 'A' || LPAD(gs::text, 3, '0')
+);
 
 
 -- Protect against duplicate seat numbers within an event
