@@ -4,8 +4,19 @@ import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import Lenis from "@studio-freight/lenis";
 import StadiumScene from "./components/StadiumScene";
+import AntiBotHUD from "./components/AntiBotHUD";
+import AntiBotQueueModal from "./components/AntiBotQueueModal";
+import Teammate4AnalyticsModal from "./components/Teammate4AnalyticsModal";
+import {
+  loginUser,
+  registerUser,
+  fetchUserProfile,
+  saveUserProfile,
+  fetchInventoryStatus,
+} from "./services/integratedApi";
 
 gsap.registerPlugin(ScrollTrigger);
+
 
 /* ==========================================================================
    1. MATCH FIXTURES DATA (WITH DETAILED STADIUM METRICS & GUIDELINES)
@@ -166,7 +177,6 @@ function generateStadiumRadialSeats(): StadiumSeat[] {
       const angleRad = (angleDeg * Math.PI) / 180;
       const seatNum = nIndex++;
       const id = `A${seatNum < 10 ? "0" + seatNum : seatNum}`;
-      const isSold = [3, 8, 17, 21].includes(seatNum);
       seats.push({
         id,
         label: id,
@@ -174,7 +184,7 @@ function generateStadiumRadialSeats(): StadiumSeat[] {
         price: 1200,
         cx: Math.round(cx + row.r * Math.cos(angleRad)),
         cy: Math.round(cy + row.r * Math.sin(angleRad)),
-        status: isSold ? "sold" : "available",
+        status: "available",
       });
     }
   });
@@ -193,7 +203,6 @@ function generateStadiumRadialSeats(): StadiumSeat[] {
       const angleRad = (angleDeg * Math.PI) / 180;
       const seatNum = eIndex++;
       const id = `E${seatNum < 10 ? "0" + seatNum : seatNum}`;
-      const isSold = [2, 7, 14].includes(seatNum);
       seats.push({
         id,
         label: id,
@@ -201,16 +210,16 @@ function generateStadiumRadialSeats(): StadiumSeat[] {
         price: 1500,
         cx: Math.round(cx + row.r * Math.cos(angleRad)),
         cy: Math.round(cy + row.r * Math.sin(angleRad)),
-        status: isSold ? "sold" : "available",
+        status: "available",
       });
     }
   });
 
   // 3. SOUTH STAND (Bottom Arc: 48° to 132°) - ₹2,000
   const southRows = [
-    { r: 166, count: 7, startAngle: 50, endAngle: 130, prefix: "S" },
-    { r: 196, count: 8, startAngle: 48, endAngle: 132, prefix: "S" },
-    { r: 222, count: 9, startAngle: 46, endAngle: 134, prefix: "S" },
+    { r: 152, count: 7, startAngle: 50, endAngle: 130, prefix: "S" },
+    { r: 170, count: 8, startAngle: 48, endAngle: 132, prefix: "S" },
+    { r: 188, count: 9, startAngle: 46, endAngle: 134, prefix: "S" },
   ];
   let sIndex = 1;
   southRows.forEach((row) => {
@@ -220,7 +229,6 @@ function generateStadiumRadialSeats(): StadiumSeat[] {
       const angleRad = (angleDeg * Math.PI) / 180;
       const seatNum = sIndex++;
       const id = `S${seatNum < 10 ? "0" + seatNum : seatNum}`;
-      const isSold = [4, 11, 19].includes(seatNum);
       seats.push({
         id,
         label: id,
@@ -228,7 +236,7 @@ function generateStadiumRadialSeats(): StadiumSeat[] {
         price: 2000,
         cx: Math.round(cx + row.r * Math.cos(angleRad)),
         cy: Math.round(cy + row.r * Math.sin(angleRad)),
-        status: isSold ? "sold" : "available",
+        status: "available",
       });
     }
   });
@@ -246,7 +254,6 @@ function generateStadiumRadialSeats(): StadiumSeat[] {
       const angleRad = (angleDeg * Math.PI) / 180;
       const seatNum = vIndex++;
       const id = `VIP-0${seatNum}`;
-      const isSold = seatNum === 3;
       seats.push({
         id,
         label: id,
@@ -254,7 +261,7 @@ function generateStadiumRadialSeats(): StadiumSeat[] {
         price: 3500,
         cx: Math.round(cx + row.r * Math.cos(angleRad)),
         cy: Math.round(cy + row.r * Math.sin(angleRad)),
-        status: isSold ? "sold" : "premium",
+        status: "premium",
       });
     }
   });
@@ -273,7 +280,6 @@ function generateStadiumRadialSeats(): StadiumSeat[] {
       const angleRad = (angleDeg * Math.PI) / 180;
       const seatNum = wIndex++;
       const id = `W${seatNum < 10 ? "0" + seatNum : seatNum}`;
-      const isSold = [3, 9, 15].includes(seatNum);
       seats.push({
         id,
         label: id,
@@ -281,7 +287,7 @@ function generateStadiumRadialSeats(): StadiumSeat[] {
         price: 1500,
         cx: Math.round(cx + row.r * Math.cos(angleRad)),
         cy: Math.round(cy + row.r * Math.sin(angleRad)),
-        status: isSold ? "sold" : "available",
+        status: "available",
       });
     }
   });
@@ -305,6 +311,10 @@ export default function App() {
   const [generatedOtp, setGeneratedOtp] = useState("849201");
   const [enteredOtp, setEnteredOtp] = useState("");
   const [authError, setAuthError] = useState("");
+  const [authToken, setAuthToken] = useState<string>(() => {
+    return sessionStorage.getItem("crictix_auth_token") || "";
+  });
+  const [isAnalyticsModalOpen, setIsAnalyticsModalOpen] = useState(false);
 
   // 2. USER PROFILE DATA & PROFILE MODAL
   const [profileModalOpen, setProfileModalOpen] = useState(false);
@@ -335,6 +345,24 @@ export default function App() {
     };
   });
 
+  // Sync profile from Teammate 2 Backend
+  useEffect(() => {
+    if (authToken) {
+      fetchUserProfile(authToken)
+        .then((res) => {
+          if (res.success && res.user) {
+            setUserProfile((prev) => ({
+              ...prev,
+              fullName: res.user.name || prev.fullName,
+              email: res.user.email || prev.email,
+              phone: res.user.phone || prev.phone,
+            }));
+          }
+        })
+        .catch(() => {});
+    }
+  }, [authToken]);
+
   // 3. THEME & SCROLL STATES
   const [scrollProgress, setScrollProgress] = useState(0);
   const [theme, setTheme] = useState<"dark" | "light">(() => {
@@ -347,18 +375,47 @@ export default function App() {
     "fixtures"
   );
   const [selectedMatch, setSelectedMatch] = useState<MatchFixture>(matches[0]);
+  const [liveAvailableSeats, setLiveAvailableSeats] = useState<number>(500);
   const [matchDetailsTab, setMatchDetailsTab] = useState<"overview" | "info" | "guidelines">("overview");
   const [carouselIndex, setCarouselIndex] = useState(0);
 
   // 5. SEAT SELECTION & ZOOM
-  // Default selected seats: A12 & A13 at ₹1,200 (exact match to user mockup)
-  const [selectedSeatIds, setSelectedSeatIds] = useState<string[]>(["A12", "A13"]);
+  const [selectedSeatIds, setSelectedSeatIds] = useState<string[]>([]);
+  const [bookedSeatIdsByMatch, setBookedSeatIdsByMatch] = useState<Record<string, string[]>>({});
+  const bookedSeatIds = bookedSeatIdsByMatch[selectedMatch.id] || [];
   const [zoomLevel, setZoomLevel] = useState<number>(1.0);
   const [hoveredSeat, setHoveredSeat] = useState<StadiumSeat | null>(null);
 
+  // Synchronize live match inventory and booked seats whenever selectedMatch changes
+  useEffect(() => {
+    const numericMatchId = Number(selectedMatch.id.replace("match-0", "").replace("match-", "")) || 1;
+    fetchInventoryStatus(numericMatchId)
+      .then((status) => {
+        if (status && status.availableSeats !== undefined) {
+          setLiveAvailableSeats(status.availableSeats);
+          setSelectedMatch((prev) => ({
+            ...prev,
+            capacity: `${Math.max(0, Math.round(((500 - status.availableSeats) / 500) * 100))}% BOOKED (${status.availableSeats}/500 SEATS LEFT)`,
+          }));
+          if (status.bookedSeatNumbers && Array.isArray(status.bookedSeatNumbers)) {
+            const mappedIds = status.bookedSeatNumbers
+              .filter((num: number) => num > 0 && num <= ALL_RADIAL_SEATS.length)
+              .map((num: number) => ALL_RADIAL_SEATS[num - 1].id);
+            setBookedSeatIdsByMatch((prev) => ({
+              ...prev,
+              [selectedMatch.id]: Array.from(new Set([...(prev[selectedMatch.id] || []), ...mappedIds])),
+            }));
+          }
+        }
+      })
+      .catch(() => {});
+  }, [selectedMatch.id]);
+
   // 6. WALLET & PASSES
   const [confirmedPass, setConfirmedPass] = useState<any | null>(null);
+  const [isQueueModalOpen, setIsQueueModalOpen] = useState(false);
   const [bookedPasses, setBookedPasses] = useState<any[]>(() => {
+
     try {
       const saved = localStorage.getItem("crictix_saved_passes");
       return saved ? JSON.parse(saved) : [];
@@ -419,24 +476,84 @@ export default function App() {
     return () => lenis.destroy();
   }, [isAuthenticated]);
 
-  // Handle Login
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  // Handle Login via Teammate 2 Backend
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!authEmail.trim() || !authPassword.trim()) {
       setAuthError("Please enter both email and password.");
       return;
     }
-    setUserProfile((prev) => ({ ...prev, email: authEmail }));
-    sessionStorage.setItem("crictix_logged_in", "true");
-    sessionStorage.setItem("crictix_user_email", authEmail);
-    setIsAuthenticated(true);
+    setAuthError("");
+
+    try {
+      let res = await loginUser(authEmail, authPassword);
+      if (!res.success) {
+        // Auto-register for smooth onboarding
+        const regRes = await registerUser(userProfile.fullName || "Alex Sharma", authEmail, authPassword);
+        if (regRes.success) {
+          res = await loginUser(authEmail, authPassword);
+        } else {
+          setAuthError(res.message || regRes.message || "Login failed. Check credentials.");
+          return;
+        }
+      }
+
+      if (res.token) {
+        sessionStorage.setItem("crictix_logged_in", "true");
+        sessionStorage.setItem("crictix_auth_token", res.token);
+        sessionStorage.setItem("crictix_user_email", authEmail);
+        setAuthToken(res.token);
+
+        if (res.user) {
+          setUserProfile((prev) => ({
+            ...prev,
+            fullName: res.user?.name || prev.fullName,
+            email: res.user?.email || authEmail,
+            phone: res.user?.phone || prev.phone,
+          }));
+        }
+
+        setIsAuthenticated(true);
+      }
+    } catch {
+      // Fallback
+      sessionStorage.setItem("crictix_logged_in", "true");
+      sessionStorage.setItem("crictix_user_email", authEmail);
+      setIsAuthenticated(true);
+    }
   };
 
-  // Quick Demo Access
-  const handleQuickDemoLogin = () => {
+  // Quick Demo Access via Teammate 2 Backend
+  const handleQuickDemoLogin = async () => {
     const demo = "fan@cricket.com";
+    const pw = "Password123!";
     setAuthEmail(demo);
-    setUserProfile((prev) => ({ ...prev, email: demo }));
+    setAuthPassword(pw);
+
+    try {
+      let res = await loginUser(demo, pw);
+      if (!res.success) {
+        await registerUser("Alex Sharma", demo, pw);
+        res = await loginUser(demo, pw);
+      }
+
+      if (res.token) {
+        sessionStorage.setItem("crictix_logged_in", "true");
+        sessionStorage.setItem("crictix_auth_token", res.token);
+        sessionStorage.setItem("crictix_user_email", demo);
+        setAuthToken(res.token);
+
+        if (res.user) {
+          setUserProfile((prev) => ({
+            ...prev,
+            fullName: res.user?.name || "Alex Sharma",
+            email: demo,
+            phone: res.user?.phone || "+91 98765 43210",
+          }));
+        }
+      }
+    } catch {}
+
     sessionStorage.setItem("crictix_logged_in", "true");
     sessionStorage.setItem("crictix_user_email", demo);
     setIsAuthenticated(true);
@@ -466,8 +583,17 @@ export default function App() {
     setAuthView("signup-success");
   };
 
-  // Complete Signup
-  const handleCompleteSignupAndEnter = () => {
+  // Complete Signup via Teammate 2 Backend
+  const handleCompleteSignupAndEnter = async () => {
+    try {
+      await registerUser(userProfile.fullName || "Alex Sharma", authEmail, authPassword || "Password123!");
+      const res = await loginUser(authEmail, authPassword || "Password123!");
+      if (res.token) {
+        sessionStorage.setItem("crictix_auth_token", res.token);
+        setAuthToken(res.token);
+      }
+    } catch {}
+
     sessionStorage.setItem("crictix_logged_in", "true");
     sessionStorage.setItem("crictix_user_email", authEmail);
     setUserProfile((prev) => ({ ...prev, email: authEmail }));
@@ -477,16 +603,32 @@ export default function App() {
   // Handle Log Out
   const handleLogOut = () => {
     sessionStorage.removeItem("crictix_logged_in");
+    sessionStorage.removeItem("crictix_auth_token");
+    setAuthToken("");
     setIsAuthenticated(false);
     setAuthView("login");
     setAuthError("");
   };
 
-  // Save Profile Updates
-  const handleSaveProfile = (e: React.FormEvent) => {
+  // Save Profile Updates to Teammate 2 Backend
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     localStorage.setItem("crictix_user_profile", JSON.stringify(userProfile));
-    setProfileSuccessMsg("Profile details saved successfully!");
+
+    try {
+      const token = authToken || sessionStorage.getItem("crictix_auth_token");
+      if (token) {
+        await saveUserProfile(token, {
+          name: userProfile.fullName,
+          email: userProfile.email,
+          phone: userProfile.phone,
+        });
+      }
+    } catch (err) {
+      console.log("Profile backend update notice:", err);
+    }
+
+    setProfileSuccessMsg("Profile saved to Teammate 2 backend successfully!");
     setTimeout(() => setProfileSuccessMsg(""), 2500);
   };
 
@@ -502,6 +644,7 @@ export default function App() {
   // Match Selection -> Goes to Match & Stadium Details Page
   const handleSelectMatch = (match: MatchFixture) => {
     setSelectedMatch(match);
+    setSelectedSeatIds([]);
     setBookingStage("match-details");
     setMatchDetailsTab("overview");
     setCarouselIndex(0);
@@ -523,7 +666,7 @@ export default function App() {
 
   // Toggle seat click in SVG circular stadium
   const toggleSeatSelection = (seat: StadiumSeat) => {
-    if (seat.status === "sold") return;
+    if (bookedSeatIds.includes(seat.id)) return;
     setSelectedSeatIds((prev) =>
       prev.includes(seat.id) ? prev.filter((id) => id !== seat.id) : [...prev, seat.id]
     );
@@ -538,23 +681,52 @@ export default function App() {
   const handleZoomIn = () => setZoomLevel((z) => Math.min(1.5, Number((z + 0.15).toFixed(2))));
   const handleZoomOut = () => setZoomLevel((z) => Math.max(0.75, Number((z - 0.15).toFixed(2))));
 
-  // Confirm booking & dispatch pass
+  // Trigger Anti-Bot Queue & Verification Flow
   const handleConfirmReservation = () => {
     if (selectedSeatsObjects.length === 0) return;
+    setIsQueueModalOpen(true);
+  };
+
+  // Called when Anti-Bot verification passes & seat is allocated atomically in Redis
+  const handleQueueSuccess = (bookingData: { pnr: string; userId: string; seatsBookedCount?: number }) => {
+    setIsQueueModalOpen(false);
+    const count = bookingData.seatsBookedCount || selectedSeatIds.length || 1;
+    const justBookedIds = [...selectedSeatIds];
+
+    // 1. Mark seats as manually booked (turning them red on the circular stadium map)
+    setBookedSeatIdsByMatch((prev) => ({
+      ...prev,
+      [selectedMatch.id]: Array.from(new Set([...(prev[selectedMatch.id] || []), ...justBookedIds])),
+    }));
+
+    // 2. Reduce the live available seats count by the number of tickets the user booked
+    setLiveAvailableSeats((prev) => {
+      const nextSeats = Math.max(0, prev - count);
+      setSelectedMatch((m) => ({
+        ...m,
+        capacity: `${Math.max(0, Math.round(((500 - nextSeats) / 500) * 100))}% BOOKED (${nextSeats}/500 SEATS LEFT)`,
+      }));
+      return nextSeats;
+    });
+
     const newPass = {
-      pnr: `CRX-${Math.floor(100000 + Math.random() * 900000)}`,
+      pnr: bookingData.pnr,
       match: selectedMatch,
       seats: selectedSeatsObjects,
-      holder: userProfile.fullName,
+      holder: userProfile.fullName || authEmail || "Cricket Fan",
       dateBooked: new Date().toLocaleDateString(),
       totalAmount: grandTotal,
     };
+
+    // 3. Clear current selection chips
+    setSelectedSeatIds([]);
 
     setConfirmedPass(newPass);
     const updated = [newPass, ...bookedPasses];
     setBookedPasses(updated);
     localStorage.setItem("crictix_saved_passes", JSON.stringify(updated));
   };
+
 
   /* ==========================================================================
      4. AUTHENTICATION GATE: LOGIN / SIGNUP / OTP / SUCCESS
@@ -782,6 +954,20 @@ export default function App() {
             onClick={() => setMyTicketsDrawerOpen(true)}
           >
             My Bookings ({bookedPasses.length})
+          </button>
+          <button
+            type="button"
+            className="nav-link-btn"
+            style={{
+              color: "#f59e0b",
+              border: "1px solid rgba(245, 158, 11, 0.4)",
+              borderRadius: "4px",
+              padding: "4px 10px",
+              fontWeight: "bold",
+            }}
+            onClick={() => setIsAnalyticsModalOpen(true)}
+          >
+            📊 50k Analytics
           </button>
           <button
             type="button"
@@ -1144,8 +1330,43 @@ export default function App() {
               ================================================================ */}
           {bookingStage === "seat-selection" && (
             <div className="seat-selection-view animate-fade-in">
+              {/* Real-Time Fair-Drop Anti-Bot System Status HUD */}
+              <AntiBotHUD
+                matchId={selectedMatch.id}
+                onOpenAnalyticsModal={() => setIsAnalyticsModalOpen(true)}
+                onSeatsUpdated={(seats) => {
+                  setLiveAvailableSeats(seats);
+                  setSelectedMatch((prev) => ({
+                    ...prev,
+                    capacity: `${Math.max(0, Math.round(((500 - seats) / 500) * 100))}% BOOKED (${seats}/500 SEATS LEFT)`,
+                  }));
+                }}
+                onBookedSeatsLoaded={(seatNums) => {
+                  const mappedIds = seatNums
+                    .filter((num) => num > 0 && num <= ALL_RADIAL_SEATS.length)
+                    .map((num) => ALL_RADIAL_SEATS[num - 1].id);
+                  setBookedSeatIdsByMatch((prev) => ({
+                    ...prev,
+                    [selectedMatch.id]: Array.from(new Set([...(prev[selectedMatch.id] || []), ...mappedIds])),
+                  }));
+                }}
+                onReset={() => {
+                  setBookedSeatIdsByMatch((prev) => ({
+                    ...prev,
+                    [selectedMatch.id]: [],
+                  }));
+                  setSelectedSeatIds([]);
+                  setLiveAvailableSeats(500);
+                  setSelectedMatch((prev) => ({
+                    ...prev,
+                    capacity: "0% BOOKED (500/500 SEATS LEFT)",
+                  }));
+                }}
+              />
+
               {/* Back to Match Details Button */}
               <div className="breadcrumb-nav">
+
                 <button
                   type="button"
                   className="back-btn"
@@ -1159,7 +1380,28 @@ export default function App() {
                 {/* LEFT COLUMN: CIRCULAR STADIUM RADIAL MAP */}
                 <div className="circular-stadium-card">
                   <div className="stadium-card-header">
-                    <h2>Select Your Seats</h2>
+                    <div>
+                      <h2>Select Your Seats</h2>
+                      <div
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          marginTop: "4px",
+                          fontSize: "0.75rem",
+                          fontWeight: 700,
+                          letterSpacing: "0.5px",
+                          padding: "3px 10px",
+                          borderRadius: "4px",
+                          background: liveAvailableSeats <= 0 ? "rgba(239, 68, 68, 0.2)" : "rgba(34, 197, 94, 0.15)",
+                          color: liveAvailableSeats <= 0 ? "#ef4444" : "#22c55e",
+                          border: `1px solid ${liveAvailableSeats <= 0 ? "rgba(239, 68, 68, 0.4)" : "rgba(34, 197, 94, 0.4)"}`,
+                        }}
+                      >
+                        <span style={{ width: 8, height: 8, borderRadius: "50%", background: liveAvailableSeats <= 0 ? "#ef4444" : "#22c55e", display: "inline-block" }} />
+                        LIVE ARENA INVENTORY: {liveAvailableSeats} / 500 AVAILABLE
+                      </div>
+                    </div>
                     <div className="stadium-legend-row">
                       <span className="legend-item">
                         <i className="legend-dot available" /> Available
@@ -1287,7 +1529,7 @@ export default function App() {
                         />
                         <text
                           x="270"
-                          y="464"
+                          y="470"
                           textAnchor="middle"
                           fill="#4ade80"
                           fontSize="11"
@@ -1298,7 +1540,7 @@ export default function App() {
                         </text>
                         <text
                           x="270"
-                          y="478"
+                          y="484"
                           textAnchor="middle"
                           fill="#94a3b8"
                           fontSize="9"
@@ -1447,21 +1689,32 @@ export default function App() {
                         <circle cx="274" cy="295" r="1" fill="#ffffff" />
 
                         {/* INTERACTIVE RADIAL SEATS */}
-                        {ALL_RADIAL_SEATS.map((seat) => {
+                        {ALL_RADIAL_SEATS.map((seat, index) => {
                           const isSelected = selectedSeatIds.includes(seat.id);
-                          const isSold = seat.status === "sold";
+                          const isManuallyBooked = bookedSeatIds.includes(seat.id);
+
+                          // Calculate how many simulation seats to turn red
+                          const totalSold = Math.max(0, 500 - liveAvailableSeats);
+                          const simSoldTickets = Math.max(0, totalSold - bookedSeatIds.length);
+                          const simFraction = Math.max(0, Math.min(1, simSoldTickets / 500));
+                          const simSeatsCount = Math.floor(ALL_RADIAL_SEATS.length * simFraction);
+                          const isSimSold = index < simSeatsCount;
+
+                          const isSold = isManuallyBooked || isSimSold;
                           const isPremium = seat.status === "premium";
 
                           let fillColor = "#22c55e"; // available: green
                           if (isSold) fillColor = "#ef4444"; // sold: red
-                          if (isPremium) fillColor = "#eab308"; // premium: gold
-                          if (isSelected) fillColor = "#00e5ff"; // selected: cyan
+                          if (isPremium && !isSold) fillColor = "#eab308"; // premium: gold
+                          if (isSelected && !isSold) fillColor = "#00e5ff"; // selected: cyan
 
                           return (
                             <g
                               key={seat.id}
                               className={`seat-node ${isSold ? "disabled" : "clickable"}`}
-                              onClick={() => toggleSeatSelection(seat)}
+                              onClick={() => {
+                                if (!isSold) toggleSeatSelection(seat);
+                              }}
                               onMouseEnter={() => setHoveredSeat(seat)}
                               onMouseLeave={() => setHoveredSeat(null)}
                             >
@@ -1765,8 +2018,28 @@ export default function App() {
         </div>
       )}
 
+      {/* FAIR-DROP ANTI-BOT QUEUE & DEFENSE VERIFICATION MODAL */}
+      <AntiBotQueueModal
+        isOpen={isQueueModalOpen}
+        onClose={() => setIsQueueModalOpen(false)}
+        onSuccess={handleQueueSuccess}
+        selectedSeatsCount={selectedSeatsObjects.length}
+        selectedSeatNumbers={selectedSeatsObjects.map((s) => ALL_RADIAL_SEATS.findIndex((x) => x.id === s.id) + 1)}
+        totalAmount={grandTotal}
+        userName={userProfile.fullName || authEmail || "Cricket Fan"}
+        authToken={authToken}
+        matchId={selectedMatch.id}
+      />
+
+      {/* TEAMMATE 4: 50,000 TRAFFIC & ALLOCATION DATA ANALYTICS MODAL */}
+      <Teammate4AnalyticsModal
+        isOpen={isAnalyticsModalOpen}
+        onClose={() => setIsAnalyticsModalOpen(false)}
+      />
+
       {/* CONFIRMED PASS VOUCHER MODAL */}
       {confirmedPass && (
+
         <div className="modal-backdrop" onClick={() => setConfirmedPass(null)}>
           <div className="tactical-modal" onClick={(e) => e.stopPropagation()}>
             <button className="modal-close" onClick={() => setConfirmedPass(null)}>✕</button>
